@@ -8,6 +8,7 @@
 const MIT_STYLE_ID = 'mit-image-tools-style';
 const MIT_MAX_DIMENSION = 16384;
 const MIT_MAX_PIXELS = 100_000_000;
+const MIT_MAX_ANIMATION_FRAMES = 600;
 
 const FORMAT_META = Object.freeze({
   png: { label: 'PNG', extension: 'png', mime: 'image/png' },
@@ -184,12 +185,45 @@ function ensureStyles() {
     .mit-color-meta { color: var(--mit-muted); font-size: .75rem; text-align: right; }
     .mit-palette-canvas { display: block; width: 100%; max-height: 180px; border-radius: 13px; }
 
+    .mit-frame-dialog {
+      position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 18px;
+      background: rgba(55, 38, 29, .48); backdrop-filter: blur(7px);
+    }
+    .mit-frame-sheet {
+      width: min(1080px, 100%); max-height: min(860px, calc(100vh - 36px)); overflow: auto;
+      padding: clamp(16px, 3vw, 24px); border: 1px solid rgba(255, 255, 255, .74); border-radius: 25px;
+      background: var(--mit-panel, #fffdfa); box-shadow: 0 28px 68px rgba(55, 38, 29, .28);
+    }
+    .mit-frame-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .mit-frame-head h3 { margin: 0; color: var(--mit-text); font-size: clamp(1.1rem, 3vw, 1.4rem); letter-spacing: -.03em; }
+    .mit-frame-head p { margin: 5px 0 0; color: var(--mit-muted); font-size: .83rem; line-height: 1.5; }
+    .mit-frame-close { flex: 0 0 auto; min-height: 38px; padding: 8px 11px; border: 1px solid var(--mit-line); border-radius: 11px; background: var(--mit-panel-raised); color: var(--mit-muted); cursor: pointer; font-weight: 800; }
+    .mit-frame-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 11px; border: 1px solid var(--mit-line); border-radius: 15px; background: var(--mit-panel-raised); }
+    .mit-frame-toolbar .mit-primary { flex: 1 1 190px; }
+    .mit-frame-count { margin-left: auto; color: var(--mit-brand-strong); font-size: .82rem; font-weight: 850; }
+    .mit-frame-status { min-height: 1.35em; margin: 12px 0 0; color: var(--mit-muted); font-size: .82rem; line-height: 1.5; }
+    .mit-frame-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 11px; margin-top: 13px; }
+    .mit-frame-card { overflow: hidden; border: 1px solid var(--mit-line); border-radius: 15px; background: var(--mit-panel-raised); }
+    .mit-frame-thumb { display: block; width: 100%; aspect-ratio: 1.2 / 1; padding: 6px; background-color: #f8f1eb; background-image: linear-gradient(45deg, rgba(220, 195, 177, .42) 25%, transparent 25%), linear-gradient(-45deg, rgba(220, 195, 177, .42) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(220, 195, 177, .42) 75%), linear-gradient(-45deg, transparent 75%, rgba(220, 195, 177, .42) 75%); background-position: 0 0, 0 10px, 10px -10px, -10px 0; background-size: 20px 20px; object-fit: contain; }
+    .mit-frame-copy { display: grid; gap: 7px; padding: 9px 10px 10px; }
+    .mit-frame-label { color: var(--mit-text); font-size: .8rem; font-weight: 850; }
+    .mit-frame-time { color: var(--mit-faint); font-size: .73rem; }
+    .mit-frame-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .mit-frame-check { display: inline-flex; align-items: center; gap: 5px; color: var(--mit-muted); font-size: .77rem; font-weight: 750; }
+    .mit-frame-check input { inline-size: 16px; block-size: 16px; accent-color: var(--mit-brand-strong); }
+    .mit-frame-save { padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--mit-good) 40%, var(--mit-line)); border-radius: 9px; background: color-mix(in srgb, var(--mit-good) 10%, var(--mit-panel)); color: var(--mit-good); cursor: pointer; font-size: .74rem; font-weight: 850; }
+    .mit-frame-dialog[data-busy="true"] button { pointer-events: none; opacity: .58; }
+
     @media (max-width: 590px) {
       .mit-grid { grid-template-columns: 1fr; }
       .mit-result-card { grid-template-columns: 1fr; }
       .mit-result-preview { height: 150px; }
       .mit-result-card .mit-download { width: 100%; }
       .mit-actions > button { flex: 1 1 130px; }
+      .mit-frame-dialog { padding: 9px; }
+      .mit-frame-sheet { max-height: calc(100vh - 18px); border-radius: 19px; }
+      .mit-frame-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mit-frame-count { width: 100%; margin-left: 0; }
     }
   `;
   document.head.append(style);
@@ -226,7 +260,7 @@ function initConverterTool(container) {
           </label>
         </div>
         <div class="mit-actions"><button class="mit-primary" type="button" data-mit-role="convert" disabled>일괄 변환</button></div>
-        <p class="mit-warning">애니메이션 GIF, APNG, Animated WebP는 현재 보이는 첫 프레임만 정적 이미지로 변환됩니다.</p>
+        <p class="mit-warning">애니메이션 GIF, APNG, Animated WebP는 프레임 선택 화면에서 원하는 장면만 골라 정지 이미지로 저장할 수 있습니다.</p>
         <p class="mit-status" data-mit-role="status" aria-live="polite"></p>
       </div>
       <div class="mit-output-list" data-mit-role="results" aria-live="polite"></div>
@@ -276,27 +310,40 @@ function initConverterTool(container) {
     results.replaceChildren();
     const outputFormat = format.value;
     const meta = FORMAT_META[outputFormat];
+    const encodeOptions = {
+      quality: Number(quality.value) / 100,
+      background: background.value,
+      iconSize: Number(iconSize.value),
+    };
     setStatus(status, `0 / ${state.files.length}개 변환 중…`);
 
     for (let index = 0; index < state.files.length; index += 1) {
       const file = state.files[index];
       try {
-        const loaded = await loadImage(file);
-        try {
-          assertCanvasSize(loaded.width, loaded.height);
-          const canvas = makeCanvas(loaded.width, loaded.height);
-          canvas.getContext('2d').drawImage(loaded.image, 0, 0);
-          const blob = await encodeCanvas(canvas, outputFormat, {
-            quality: Number(quality.value) / 100,
-            background: background.value,
-            iconSize: Number(iconSize.value),
+        const frames = await decodeAnimatedFrames(file);
+        if (frames) {
+          const selection = await openFramePicker({
+            file,
+            frames,
+            outputFormat,
+            format: meta,
+            options: encodeOptions,
           });
-          const previewUrl = URL.createObjectURL(blob);
-          state.previewUrls.push(previewUrl);
-          const filename = `${fileBaseName(file.name)}_converted.${meta.extension}`;
-          results.append(makeConversionResult({ previewUrl, filename, blob, source: file, format: meta }));
-        } finally {
-          loaded.release();
+          results.append(makeFrameSelectionResult(file, selection, meta));
+        } else {
+          const loaded = await loadImage(file);
+          try {
+            assertCanvasSize(loaded.width, loaded.height);
+            const canvas = makeCanvas(loaded.width, loaded.height);
+            canvas.getContext('2d').drawImage(loaded.image, 0, 0);
+            const blob = await encodeCanvas(canvas, outputFormat, encodeOptions);
+            const previewUrl = URL.createObjectURL(blob);
+            state.previewUrls.push(previewUrl);
+            const filename = `${fileBaseName(file.name)}_converted.${meta.extension}`;
+            results.append(makeConversionResult({ previewUrl, filename, blob, source: file, format: meta }));
+          } finally {
+            loaded.release();
+          }
         }
       } catch (error) {
         results.append(makeErrorResult(file.name, readableError(error)));
@@ -1283,6 +1330,373 @@ function makeErrorResult(filename, message) {
   copy.append(name, detail);
   card.append(copy);
   return card;
+}
+
+function makeFrameSelectionResult(file, selection, format) {
+  const card = document.createElement('article');
+  card.className = 'mit-result-card';
+  const copy = document.createElement('div');
+  copy.className = 'mit-result-copy';
+  const name = document.createElement('div');
+  name.className = 'mit-result-name';
+  name.textContent = file.name;
+  const detail = document.createElement('div');
+  detail.className = 'mit-result-meta';
+  detail.textContent = selection.downloaded
+    ? selection.downloaded + '개 프레임을 ' + format.label + ' 정지 이미지로 저장했습니다.'
+    : '프레임 선택을 건너뛰었습니다.';
+  copy.append(name, detail);
+  card.append(copy);
+  return card;
+}
+
+async function decodeAnimatedFrames(file) {
+  const animation = await inspectAnimation(file);
+  if (!animation) return null;
+  if (!('ImageDecoder' in window)) {
+    throw new Error('이 브라우저는 애니메이션 프레임 선택을 지원하지 않습니다. 최신 Chrome 또는 Edge에서 다시 시도해 주세요.');
+  }
+
+  const decoder = new window.ImageDecoder({ data: animation.bytes, type: animation.mime });
+  try {
+    await decoder.tracks.ready;
+    const frameCount = Number(decoder.tracks.selectedTrack?.frameCount) || 1;
+    if (frameCount < 2) return null;
+    if (frameCount > MIT_MAX_ANIMATION_FRAMES) {
+      throw new Error('프레임이 ' + frameCount.toLocaleString() + '개입니다. 브라우저 안정성을 위해 ' + MIT_MAX_ANIMATION_FRAMES.toLocaleString() + '개 이하의 애니메이션만 선택할 수 있습니다.');
+    }
+
+    const frames = [];
+    let elapsedMs = 0;
+    for (let index = 0; index < frameCount; index += 1) {
+      const { image } = await decoder.decode({ frameIndex: index });
+      try {
+        const width = image.displayWidth || image.codedWidth;
+        const height = image.displayHeight || image.codedHeight;
+        assertCanvasSize(width, height);
+        const canvas = makeCanvas(width, height);
+        canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+        const blob = await canvasToBlob(canvas, 'image/png');
+        const durationMs = Number.isFinite(image.duration) && image.duration > 0
+          ? Math.max(10, Math.round(image.duration / 1000))
+          : 100;
+        frames.push({ index: index + 1, blob, durationMs, elapsedMs });
+        elapsedMs += durationMs;
+      } finally {
+        image.close?.();
+      }
+      if (index % 12 === 11) await nextFrame();
+    }
+    return frames;
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error('애니메이션 프레임을 읽지 못했습니다.');
+  } finally {
+    decoder.close?.();
+  }
+}
+
+async function inspectAnimation(file) {
+  const mime = animationMime(file);
+  if (!mime) return null;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const animated = mime === 'image/gif'
+    ? isAnimatedGif(bytes)
+    : mime === 'image/png'
+      ? isAnimatedPng(bytes)
+      : isAnimatedWebp(bytes);
+  return animated ? { bytes, mime } : null;
+}
+
+function animationMime(file) {
+  const extension = fileExtension(file.name);
+  if (extension === 'gif' || file.type === 'image/gif') return 'image/gif';
+  if (extension === 'apng' || file.type === 'image/apng') return 'image/png';
+  if (extension === 'png' || file.type === 'image/png') return 'image/png';
+  if (extension === 'webp' || file.type === 'image/webp') return 'image/webp';
+  return null;
+}
+
+function fileExtension(name) {
+  const match = /\.([^.]+)$/.exec(String(name || ''));
+  return match ? match[1].toLowerCase() : '';
+}
+
+function isAnimatedGif(bytes) {
+  if (bytes.length < 13) return false;
+  const header = String.fromCharCode(...bytes.slice(0, 6));
+  if (header !== 'GIF87a' && header !== 'GIF89a') return false;
+  let offset = 6;
+  const packed = bytes[offset + 4];
+  offset += 7;
+  if (packed & 0x80) offset += 3 * (2 ** ((packed & 7) + 1));
+  let frameCount = 0;
+
+  while (offset < bytes.length) {
+    const marker = bytes[offset++];
+    if (marker === 0x3b) break;
+    if (marker === 0x2c) {
+      if (++frameCount > 1) return true;
+      offset += 8;
+      const localPacked = bytes[offset++];
+      if (localPacked & 0x80) offset += 3 * (2 ** ((localPacked & 7) + 1));
+      offset += 1;
+      while (offset < bytes.length) {
+        const blockSize = bytes[offset++];
+        if (blockSize === 0) break;
+        offset += blockSize;
+      }
+    } else if (marker === 0x21) {
+      offset += 1;
+      while (offset < bytes.length) {
+        const blockSize = bytes[offset++];
+        if (blockSize === 0) break;
+        offset += blockSize;
+      }
+    } else {
+      break;
+    }
+  }
+  return false;
+}
+
+function isAnimatedPng(bytes) {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < signature.length) return false;
+  for (let index = 0; index < signature.length; index += 1) {
+    if (bytes[index] !== signature[index]) return false;
+  }
+  let offset = 8;
+  while (offset + 12 <= bytes.length) {
+    const length = uint32BigEndian(bytes, offset);
+    const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+    if (type === 'acTL') return true;
+    offset += 12 + length;
+  }
+  return false;
+}
+
+function isAnimatedWebp(bytes) {
+  if (bytes.length < 16) return false;
+  if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== 'RIFF'
+    || String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]) !== 'WEBP') return false;
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const type = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+    const size = uint32LittleEndian(bytes, offset + 4);
+    if (type === 'ANIM') return true;
+    if (type === 'VP8X' && offset + 9 <= bytes.length && (bytes[offset + 8] & 0x02)) return true;
+    offset += 8 + size + (size % 2);
+  }
+  return false;
+}
+
+function uint32BigEndian(bytes, offset) {
+  return (((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0);
+}
+
+function uint32LittleEndian(bytes, offset) {
+  return ((bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0);
+}
+
+function openFramePicker({ file, frames, outputFormat, format, options }) {
+  return new Promise(resolve => {
+    const dialog = document.createElement('div');
+    dialog.className = 'mit-frame-dialog';
+    dialog.dataset.busy = 'false';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-label', file.name + ' 프레임 선택');
+
+    const sheet = document.createElement('section');
+    sheet.className = 'mit-frame-sheet';
+    const head = document.createElement('header');
+    head.className = 'mit-frame-head';
+    const heading = document.createElement('div');
+    const title = document.createElement('h3');
+    title.textContent = '애니메이션 프레임 선택';
+    const description = document.createElement('p');
+    description.textContent = file.name + ' · ' + frames.length.toLocaleString() + '개 프레임 중 저장할 장면을 고르세요.';
+    heading.append(title, description);
+    const close = document.createElement('button');
+    close.className = 'mit-frame-close';
+    close.type = 'button';
+    close.textContent = '건너뛰기';
+    head.append(heading, close);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'mit-frame-toolbar';
+    const selectAll = document.createElement('button');
+    selectAll.className = 'mit-secondary';
+    selectAll.type = 'button';
+    selectAll.textContent = '전체 선택';
+    const clear = document.createElement('button');
+    clear.className = 'mit-secondary';
+    clear.type = 'button';
+    clear.textContent = '선택 해제';
+    const save = document.createElement('button');
+    save.className = 'mit-primary';
+    save.type = 'button';
+    save.textContent = '선택 프레임 ' + format.label + ' 저장';
+    const count = document.createElement('span');
+    count.className = 'mit-frame-count';
+    toolbar.append(selectAll, clear, save, count);
+
+    const status = document.createElement('p');
+    status.className = 'mit-frame-status';
+    status.setAttribute('aria-live', 'polite');
+    const grid = document.createElement('div');
+    grid.className = 'mit-frame-grid';
+    sheet.append(head, toolbar, status, grid);
+    dialog.append(sheet);
+
+    const items = frames.map(frame => ({ ...frame, url: URL.createObjectURL(frame.blob) }));
+    const selected = new Set();
+    let directDownloads = 0;
+    let settled = false;
+    let busy = false;
+
+    const cleanup = () => {
+      document.removeEventListener('keydown', onKeyDown);
+      items.forEach(item => URL.revokeObjectURL(item.url));
+      dialog.remove();
+    };
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+    const setBusy = value => {
+      busy = value;
+      dialog.dataset.busy = String(value);
+    };
+    const updateCount = () => {
+      count.textContent = selected.size + ' / ' + items.length + '개 선택';
+    };
+    const selectedItems = () => items.filter(item => selected.has(item.index));
+    const exportFrame = async frame => {
+      const loaded = await loadImage(frame.blob);
+      try {
+        const canvas = makeCanvas(loaded.width, loaded.height);
+        canvas.getContext('2d').drawImage(loaded.image, 0, 0);
+        const blob = await encodeCanvas(canvas, outputFormat, options);
+        const filename = fileBaseName(file.name) + '_frame_' + String(frame.index).padStart(4, '0') + '.' + format.extension;
+        downloadBlob(blob, filename);
+      } finally {
+        loaded.release();
+      }
+    };
+    const saveSelection = async () => {
+      const targets = selectedItems();
+      if (!targets.length) {
+        status.textContent = '저장할 프레임을 하나 이상 선택해 주세요.';
+        return;
+      }
+      setBusy(true);
+      try {
+        for (let index = 0; index < targets.length; index += 1) {
+          status.textContent = (index + 1) + ' / ' + targets.length + '개 프레임 저장 중…';
+          await exportFrame(targets[index]);
+          await nextFrame();
+        }
+        finish({ downloaded: targets.length + directDownloads });
+      } catch (error) {
+        status.textContent = '프레임 저장 중 오류가 발생했습니다: ' + readableError(error);
+        setBusy(false);
+      }
+    };
+    const saveSingle = async frame => {
+      if (busy) return;
+      setBusy(true);
+      try {
+        status.textContent = frame.index + '번 프레임을 저장하는 중…';
+        await exportFrame(frame);
+        directDownloads += 1;
+        status.textContent = frame.index + '번 프레임을 저장했습니다. 다른 프레임을 더 고르거나 건너뛰기를 누르세요.';
+      } catch (error) {
+        status.textContent = '프레임 저장 중 오류가 발생했습니다: ' + readableError(error);
+      } finally {
+        setBusy(false);
+      }
+    };
+    const onKeyDown = event => {
+      if (event.key === 'Escape' && !busy) finish({ downloaded: directDownloads });
+    };
+
+    for (const item of items) {
+      const card = document.createElement('article');
+      card.className = 'mit-frame-card';
+      const thumbnail = document.createElement('img');
+      thumbnail.className = 'mit-frame-thumb';
+      thumbnail.src = item.url;
+      thumbnail.alt = item.index + '번 프레임';
+      thumbnail.loading = 'lazy';
+      const copy = document.createElement('div');
+      copy.className = 'mit-frame-copy';
+      const label = document.createElement('div');
+      label.className = 'mit-frame-label';
+      label.textContent = item.index + '번 프레임';
+      const time = document.createElement('div');
+      time.className = 'mit-frame-time';
+      time.textContent = formatFrameTime(item.elapsedMs);
+      const actions = document.createElement('div');
+      actions.className = 'mit-frame-actions';
+      const checkLabel = document.createElement('label');
+      checkLabel.className = 'mit-frame-check';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selected.add(item.index);
+        else selected.delete(item.index);
+        updateCount();
+      });
+      checkLabel.append(checkbox, document.createTextNode('선택'));
+      const singleSave = document.createElement('button');
+      singleSave.className = 'mit-frame-save';
+      singleSave.type = 'button';
+      singleSave.textContent = '저장';
+      singleSave.addEventListener('click', () => saveSingle(item));
+      actions.append(checkLabel, singleSave);
+      copy.append(label, time, actions);
+      card.append(thumbnail, copy);
+      grid.append(card);
+    }
+
+    selectAll.addEventListener('click', () => {
+      grid.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = true;
+      });
+      items.forEach(item => selected.add(item.index));
+      updateCount();
+    });
+    clear.addEventListener('click', () => {
+      grid.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+      });
+      selected.clear();
+      updateCount();
+    });
+    save.addEventListener('click', saveSelection);
+    close.addEventListener('click', () => {
+      if (!busy) finish({ downloaded: directDownloads });
+    });
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog && !busy) finish({ downloaded: directDownloads });
+    });
+    document.addEventListener('keydown', onKeyDown);
+    updateCount();
+    status.textContent = '프레임을 선택한 뒤 저장하세요. 각 카드의 저장 버튼으로 하나씩 내려받을 수도 있습니다.';
+    document.body.append(dialog);
+    requestAnimationFrame(() => close.focus());
+  });
+}
+
+function formatFrameTime(milliseconds) {
+  const totalTenths = Math.max(0, Math.round(milliseconds / 100));
+  const minutes = Math.floor(totalTenths / 600);
+  const seconds = ((totalTenths % 600) / 10).toFixed(1).padStart(4, '0');
+  return minutes + ':' + seconds;
 }
 
 function collectDominantColors(imageData) {
