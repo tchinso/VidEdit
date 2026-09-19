@@ -3,541 +3,360 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#5865f2">
-  <title>Discord 20MB 미디어 도구</title>
+  <meta name="theme-color" content="#ef7d2d">
+  <title>Media Studio · 로컬 미디어 편집 및 분석 도구</title>
   <style>
     :root {
-      color-scheme: dark;
-      --page: #111827;
-      --panel: #18233f;
-      --panel-raised: #202e50;
-      --line: #33466f;
-      --text: #eef2ff;
-      --muted: #aab5ce;
-      --faint: #77839e;
-      --brand: #7183ff;
-      --brand-strong: #5865f2;
-      --good: #43b581;
-      --warn: #faa61a;
-      --danger: #f04747;
+      color-scheme: light;
+      --page: #fff8f2;
+      --page-wash: #fff0df;
+      --panel: #ffffff;
+      --panel-raised: #fffaf5;
+      --line: #efd9c4;
+      --line-strong: #e7ba95;
+      --text: #37261d;
+      --muted: #7d685a;
+      --faint: #a58d7b;
+      --brand: #f08a3c;
+      --brand-strong: #dc6f25;
+      --brand-deep: #ae4915;
+      --brand-soft: #fff0e1;
+      --good: #2e9a66;
+      --good-soft: #e7f7ee;
+      --warn: #bd7314;
+      --warn-soft: #fff4de;
+      --danger: #d6574b;
+      --danger-soft: #ffedea;
+      --shadow: 0 16px 42px rgba(116, 68, 30, .10);
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
     }
 
     * { box-sizing: border-box; }
-
+    html { scroll-behavior: smooth; }
     body {
       min-height: 100vh;
       margin: 0;
-      padding: 24px 16px 40px;
-      background: radial-gradient(circle at 50% -20%, #253c73 0, var(--page) 42%);
+      padding: 22px 16px 42px;
+      background:
+        radial-gradient(circle at 4% 2%, #ffe1c6 0, transparent 26rem),
+        radial-gradient(circle at 96% 8%, #ffeedc 0, transparent 31rem),
+        linear-gradient(180deg, var(--page) 0%, #fffdfb 58%, #fff6ed 100%);
       color: var(--text);
       font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
     }
 
-    button, input, select { font: inherit; }
-
-    button:focus-visible, input:focus-visible, select:focus-visible {
-      outline: 3px solid rgba(113, 131, 255, .55);
+    button, input, select, textarea { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid rgba(240, 138, 60, .33);
       outline-offset: 2px;
     }
-
+    button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity: .58; }
     [hidden] { display: none !important; }
 
-    .app-shell {
-      width: min(100%, 780px);
-      margin: 0 auto;
+    .app-shell { width: min(100%, 1160px); margin: 0 auto; }
+    .hero {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: center;
+      margin: 7px auto 24px;
+      padding: 23px 25px;
+      border: 1px solid rgba(231, 186, 149, .7);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, .82);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
     }
-
-    header {
-      text-align: center;
-      margin: 10px auto 24px;
+    .brand-mark {
+      display: grid;
+      width: 58px;
+      height: 58px;
+      place-items: center;
+      border-radius: 21px;
+      background: conic-gradient(from 210deg, #ffbb73, #ef7d2d, #f2aa65, #ffe1bd, #ffbb73);
+      box-shadow: inset 0 0 0 1px rgba(173, 73, 21, .14), 0 9px 20px rgba(214, 104, 32, .20);
+      color: #fff;
+      font-size: 1.62rem;
     }
-
-    h1 {
-      margin: 0 0 10px;
-      font-size: clamp(1.65rem, 4vw, 2.2rem);
-      letter-spacing: -.045em;
-      background: linear-gradient(135deg, #9ba7ff, #68d9ff);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-
-    header p {
-      max-width: 620px;
-      margin: 5px auto;
-      color: var(--muted);
-      font-size: .95rem;
-      line-height: 1.6;
-    }
-
-    .plan-badge {
+    .hero-copy { min-width: 0; }
+    h1 { margin: 0 0 7px; font-size: clamp(1.55rem, 4vw, 2.35rem); letter-spacing: -.055em; line-height: 1.08; }
+    .hero p { max-width: 750px; margin: 0; color: var(--muted); font-size: .96rem; line-height: 1.62; }
+    .hero-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+    .badge {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      margin-top: 14px;
-      padding: 8px 12px;
-      border: 1px solid rgba(113, 131, 255, .6);
+      gap: 6px;
+      padding: 6px 10px;
+      border: 1px solid #f2d1b4;
       border-radius: 999px;
-      background: rgba(88, 101, 242, .15);
-      color: #dfe4ff;
-      font-size: .85rem;
-      font-weight: 700;
+      background: var(--brand-soft);
+      color: var(--brand-deep);
+      font-size: .78rem;
+      font-weight: 800;
     }
 
-    .tabs {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 18px;
+    .tool-navigation {
+      margin-bottom: 20px;
+      padding: 14px;
+      border: 1px solid rgba(231, 186, 149, .66);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, .78);
+      box-shadow: 0 8px 24px rgba(116, 68, 30, .06);
     }
-
+    .tab-group + .tab-group { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .nav-label { margin: 0 0 8px 2px; color: var(--faint); font-size: .74rem; font-weight: 900; letter-spacing: .07em; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .tab {
-      min-height: 52px;
-      padding: 9px 8px;
-      border: 1px solid transparent;
-      border-radius: 12px;
-      background: rgba(24, 35, 63, .9);
+      min-height: 40px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-raised);
       color: var(--muted);
       cursor: pointer;
-      font-size: .86rem;
-      font-weight: 700;
-      line-height: 1.35;
-      transition: .18s ease;
+      font-size: .84rem;
+      font-weight: 800;
+      line-height: 1.2;
+      transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease, transform .18s ease;
     }
-
-    .tab:hover { color: var(--text); background: var(--panel-raised); }
-
-    .tab.active {
-      border-color: var(--brand);
-      background: rgba(88, 101, 242, .2);
-      color: var(--text);
-      box-shadow: 0 0 0 1px rgba(113, 131, 255, .1) inset;
-    }
-
-    .tab-content { display: none; }
+    .tab:hover { border-color: var(--line-strong); color: var(--brand-deep); transform: translateY(-1px); }
+    .tab.active { border-color: var(--brand); background: linear-gradient(135deg, #fff7ef, #ffe9d3); box-shadow: 0 0 0 3px rgba(240, 138, 60, .11); color: var(--brand-deep); }
+    .tab-content { display: none; animation: tab-enter .22s ease both; }
     .tab-content.active { display: block; }
+    @keyframes tab-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
+    .page-heading { margin: 0 0 14px; }
+    .page-heading h2 { margin: 0 0 5px; font-size: clamp(1.18rem, 2.7vw, 1.46rem); letter-spacing: -.035em; }
+    .page-heading p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; }
     .settings, .tool-controls, .results, .footer-note, .log-actions { width: 100%; }
-
     .settings {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 8px 18px;
       margin-bottom: 14px;
-      padding: 14px 16px;
-      border: 1px solid rgba(79, 103, 151, .45);
-      border-radius: 14px;
-      background: rgba(24, 35, 63, .82);
+      padding: 13px 15px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, .84);
+      box-shadow: 0 5px 14px rgba(116, 68, 30, .04);
       color: var(--muted);
-      font-size: .9rem;
+      font-size: .88rem;
     }
-
-    .setting-strong { color: #b6c1ff; font-weight: 800; }
-
+    .setting-strong { color: var(--brand-deep); font-weight: 900; }
     .upload-area {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 226px;
+      min-height: 224px;
       padding: 24px;
-      border: 2px dashed var(--brand);
-      border-radius: 18px;
-      background: rgba(88, 101, 242, .07);
+      border: 2px dashed #e7b583;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 247, 237, .72);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .78);
       cursor: pointer;
       text-align: center;
       transition: .2s ease;
     }
-
-    .upload-area:hover, .upload-area.dragover {
-      transform: translateY(-2px);
-      border-color: #9ba7ff;
-      background: rgba(88, 101, 242, .16);
-    }
-
-    .upload-area.processing { pointer-events: none; opacity: .48; }
-    .upload-area .icon { margin-bottom: 12px; font-size: 3rem; }
-    .upload-area .text { color: var(--text); font-size: 1.04rem; font-weight: 700; }
+    .upload-area:hover, .upload-area.dragover { transform: translateY(-2px); border-color: var(--brand); background: #fff0df; box-shadow: 0 9px 22px rgba(199, 98, 25, .11); }
+    .upload-area.processing { pointer-events: none; opacity: .52; }
+    .upload-area .icon { margin-bottom: 12px; font-size: 2.85rem; }
+    .upload-area .text { color: var(--text); font-size: 1.02rem; font-weight: 900; }
     .upload-area .subtext { margin-top: 8px; color: var(--faint); font-size: .82rem; line-height: 1.5; }
-
     input[type="file"] { display: none; }
-
     .tool-controls {
       margin-top: 14px;
-      padding: 16px;
-      border: 1px solid rgba(79, 103, 151, .55);
-      border-radius: 16px;
-      background: rgba(24, 35, 63, .94);
+      padding: 17px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, .93);
+      box-shadow: var(--shadow);
     }
-
-    .tool-file-info {
-      margin-bottom: 14px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: rgba(113, 131, 255, .11);
-      color: var(--muted);
-      font-size: .86rem;
-      line-height: 1.55;
-      overflow-wrap: anywhere;
-    }
-
+    .tool-file-info { margin-bottom: 14px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--muted); font-size: .86rem; line-height: 1.55; overflow-wrap: anywhere; }
     .tool-file-info strong { color: var(--text); }
-
-    .editor-preview {
-      display: block;
-      width: 100%;
-      max-height: 310px;
-      margin-bottom: 16px;
-      border-radius: 12px;
-      background: #090d19;
+    .editor-preview { display: block; width: 100%; max-height: 350px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #30271f; }
+    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .83rem; font-weight: 800; }
+    .field input, .field select, .mit-tool input:not([type="file"]), .mit-tool select, .mia-tool input:not([type="file"]), .mia-tool select, .mio-tool input:not([type="file"]), .mio-tool select {
+      width: 100%; min-width: 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fffdfb; color: var(--text);
     }
-
-    .field-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 12px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      color: var(--muted);
-      font-size: .84rem;
-      font-weight: 700;
-    }
-
-    .field input, .field select {
-      width: 100%;
-      min-width: 0;
-      padding: 10px 11px;
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      background: #101a30;
-      color: var(--text);
-    }
-
-    .mode-options {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    .mode-option {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      min-height: 40px;
-      padding: 8px 10px;
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: .87rem;
-    }
-
-    .mode-option:has(input:checked) {
-      border-color: var(--brand);
-      background: rgba(88, 101, 242, .15);
-      color: var(--text);
-    }
-
+    .mode-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .mode-option { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fffdfb; color: var(--muted); cursor: pointer; font-size: .85rem; }
+    .mode-option:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-deep); }
     .range-fields { margin-top: 4px; }
-
-    .help-text, .estimate {
-      margin: 12px 0 0;
-      color: var(--faint);
-      font-size: .82rem;
-      line-height: 1.55;
+    .help-text, .estimate { margin: 12px 0 0; color: var(--faint); font-size: .82rem; line-height: 1.55; }
+    .estimate { color: var(--brand-deep); font-weight: 800; }
+    .primary-btn, .mit-primary, .mia-primary, .mio-primary {
+      width: 100%; margin-top: 16px; padding: 12px 16px; border: 1px solid var(--brand-strong); border-radius: 12px; background: linear-gradient(135deg, var(--brand-strong), #f5a05a); box-shadow: 0 7px 15px rgba(208, 93, 20, .18); color: #fff; cursor: pointer; font-size: .95rem; font-weight: 900; transition: transform .18s ease, filter .18s ease;
     }
-
-    .estimate { color: #b6c1ff; font-weight: 700; }
-
-    .primary-btn {
-      width: 100%;
-      margin-top: 16px;
-      padding: 12px 16px;
-      border: 0;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--brand-strong), #7183ff);
-      color: #fff;
-      cursor: pointer;
-      font-size: .96rem;
-      font-weight: 800;
-      transition: transform .18s ease, filter .18s ease;
-    }
-
-    .primary-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
-    .primary-btn:disabled { cursor: not-allowed; filter: grayscale(.4); opacity: .58; transform: none; }
-
-    .results {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .result-card {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 15px;
-      border: 1px solid rgba(79, 103, 151, .45);
-      border-radius: 14px;
-      background: var(--panel);
-      animation: slide-in .22s ease;
-    }
-
-    @keyframes slide-in {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .preview, .video-preview {
-      width: 116px;
-      height: 80px;
-      flex: 0 0 auto;
-      border-radius: 9px;
-      background: #090d19;
-      object-fit: cover;
-    }
-
+    .primary-btn:hover, .mit-primary:hover, .mia-primary:hover, .mio-primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
+    .primary-btn:disabled, .mit-primary:disabled, .mia-primary:disabled, .mio-primary:disabled { cursor: not-allowed; filter: grayscale(.25); opacity: .58; transform: none; }
+    .results { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+    .result-card { display: flex; align-items: center; gap: 14px; padding: 15px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); box-shadow: 0 7px 18px rgba(116, 68, 30, .06); animation: slide-in .22s ease; }
+    @keyframes slide-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .preview, .video-preview { width: 116px; height: 80px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 10px; background: #f8ede2; object-fit: cover; }
     .result-card .info { min-width: 0; flex: 1; }
-    .filename { overflow: hidden; margin-bottom: 8px; color: var(--text); font-size: .92rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-
+    .filename { overflow: hidden; margin-bottom: 8px; color: var(--text); font-size: .91rem; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
     .stats { display: flex; flex-wrap: wrap; gap: 6px; }
-    .stat { padding: 4px 7px; border-radius: 6px; background: rgba(113, 131, 255, .12); color: var(--muted); font-size: .76rem; }
-    .stat.before { color: #ff9292; }
-    .stat.after { color: #74d7aa; }
-    .stat.ratio { color: #ffd180; }
-
-    .download-btn {
-      flex: 0 0 auto;
-      padding: 10px 13px;
-      border: 0;
-      border-radius: 9px;
-      background: var(--good);
-      color: #fff;
-      cursor: pointer;
-      font-size: .84rem;
-      font-weight: 800;
-    }
-
+    .stat { padding: 4px 7px; border-radius: 7px; background: var(--brand-soft); color: var(--muted); font-size: .75rem; }
+    .stat.before { background: var(--danger-soft); color: #ad443b; }
+    .stat.after { background: var(--good-soft); color: #257c53; }
+    .stat.ratio { background: var(--warn-soft); color: #a8650d; }
+    .download-btn, .mit-secondary, .mia-secondary, .mio-secondary { flex: 0 0 auto; padding: 10px 13px; border: 1px solid #9dd5b9; border-radius: 10px; background: var(--good-soft); color: #22764f; cursor: pointer; font-size: .83rem; font-weight: 900; }
+    .download-btn:hover, .mit-secondary:hover, .mia-secondary:hover, .mio-secondary:hover { filter: brightness(.98); }
     .warning-text { margin-top: 7px; color: var(--warn); font-size: .77rem; line-height: 1.45; }
-
-    .footer-note {
-      margin-top: 28px;
-      color: var(--faint);
-      font-size: .82rem;
-      line-height: 1.65;
-      text-align: center;
-    }
-
-    .log-actions { display: flex; justify-content: center; margin-top: 20px; }
-
-    #copyLogBtn {
-      padding: 8px 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: .8rem;
-    }
-
-    #copyLogBtn:hover, #copyLogBtn.copied { border-color: var(--brand); color: var(--text); }
-
-    .processing-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 12px;
-      padding: 28px;
-      background: rgba(5, 10, 23, .86);
-      backdrop-filter: blur(5px);
-      text-align: center;
-    }
-
+    .footer-note { margin-top: 28px; color: var(--faint); font-size: .82rem; line-height: 1.65; text-align: center; }
+    .log-actions { display: flex; justify-content: center; margin-top: 18px; }
+    #copyLogBtn { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 255, 255, .72); color: var(--muted); cursor: pointer; font-size: .8rem; font-weight: 800; }
+    #copyLogBtn:hover, #copyLogBtn.copied { border-color: var(--brand); color: var(--brand-deep); }
+    .processing-overlay { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 28px; background: rgba(55, 38, 29, .43); backdrop-filter: blur(8px); text-align: center; }
     .processing-overlay.active { display: flex; }
-    .processing-text { color: var(--text); font-size: 1.14rem; font-weight: 800; }
-    .processing-subtext { max-width: 440px; color: var(--muted); font-size: .88rem; line-height: 1.5; }
-    .progress-bar { width: min(82vw, 360px); height: 10px; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .13); }
-    .progress-bar .fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brand-strong), #65d7ff); transition: width .2s ease; }
-    .progress-percent { color: #fff; font-size: .9rem; font-weight: 800; }
-    .file-counter { min-height: 18px; color: #b6c1ff; font-size: .82rem; }
-    .cancel-btn { margin-top: 5px; padding: 10px 22px; border: 1px solid var(--danger); border-radius: 9px; background: transparent; color: #ff8585; cursor: pointer; font-weight: 800; }
+    .processing-overlay > * { position: relative; z-index: 1; }
+    .processing-overlay::before { position: absolute; width: min(92vw, 470px); height: 250px; border: 1px solid rgba(255, 255, 255, .8); border-radius: 28px; background: rgba(255, 255, 255, .96); box-shadow: 0 24px 64px rgba(55, 38, 29, .24); content: ""; }
+    .processing-text { color: var(--text); font-size: 1.13rem; font-weight: 900; }
+    .processing-subtext { max-width: 390px; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+    .progress-bar { width: min(76vw, 350px); height: 10px; overflow: hidden; border-radius: 99px; background: #f5dfcb; }
+    .progress-bar .fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brand-strong), #f7af69); transition: width .2s ease; }
+    .progress-percent { color: var(--brand-deep); font-size: .9rem; font-weight: 900; }
+    .file-counter { min-height: 18px; color: var(--faint); font-size: .82rem; }
+    .cancel-btn { margin-top: 5px; padding: 9px 20px; border: 1px solid #eeafa8; border-radius: 999px; background: var(--danger-soft); color: #b6483e; cursor: pointer; font-weight: 900; }
     .cancel-btn:disabled { cursor: wait; opacity: .55; }
 
-    @media (max-width: 650px) {
-      body { padding: 14px 12px 28px; }
-      .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .tab { min-height: 46px; }
+    @media (max-width: 720px) {
+      body { padding: 12px 11px 28px; }
+      .hero { grid-template-columns: 1fr; gap: 13px; padding: 20px; border-radius: 24px; }
+      .brand-mark { width: 49px; height: 49px; border-radius: 17px; }
+      .tool-navigation { padding: 11px; border-radius: 20px; }
+      .tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+      .tab { flex: 0 0 auto; }
       .result-card { align-items: stretch; flex-direction: column; }
-      .preview, .video-preview { width: 100%; height: 180px; }
+      .preview, .video-preview { width: 100%; height: 190px; }
       .download-btn { width: 100%; }
     }
-
-    @media (max-width: 390px) {
+    @media (max-width: 430px) {
       .field-grid { grid-template-columns: 1fr; }
       .settings { align-items: flex-start; flex-direction: column; gap: 6px; }
-      .tab { font-size: .79rem; }
     }
   </style>
 </head>
 <body>
   <main class="app-shell">
-    <header>
-      <h1>📦 Discord 20MB 미디어 도구</h1>
-      <p>이미지와 동영상을 브라우저에서만 처리합니다. 파일은 서버로 전송되지 않습니다.</p>
-      <div class="plan-badge">🛡️ Discord 무료 플랜 · 파일당 20MB 기준</div>
+    <header class="hero">
+      <div class="brand-mark" aria-hidden="true">✦</div>
+      <div class="hero-copy">
+        <h1>Media Studio</h1>
+        <p>이미지와 영상을 브라우저 안에서 편집·변환·분석하세요. 파일은 어디에도 업로드되지 않습니다.</p>
+        <div class="hero-badges">
+          <span class="badge">🔒 100% 로컬 처리</span>
+          <span class="badge">🧡 편집 · 합성 · 분석</span>
+          <span class="badge">📦 Discord 20MB 압축</span>
+        </div>
+      </div>
     </header>
 
-    <nav class="tabs" aria-label="도구 선택" role="tablist">
-      <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="image">🖼️ 이미지 압축</button>
-      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="video">🎬 동영상 압축</button>
-      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="speed">⏩ 속도 조절</button>
-      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="trim">✂️ 영상 자르기</button>
+    <nav class="tool-navigation" aria-label="도구 선택" role="tablist">
+      <div class="tab-group">
+        <p class="nav-label">이미지 편집</p>
+        <div class="tabs">
+          <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="image">🗜️ 이미지 압축</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="convert">🔄 이미지 변환</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="padding">↕️ 여백 편집</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="merge">🧩 이미지 병합</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="rotate">↪️ 회전</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="resize">↗️ 크기 조절</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="blur">🌫️ 흐림</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="overlay">🖼️ 이미지 합성</button>
+        </div>
+      </div>
+      <div class="tab-group">
+        <p class="nav-label">이미지 분석</p>
+        <div class="tabs">
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="color">🎨 색상 분석</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="pixel">🔳 도트화</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="forensics">🔎 이미지 검사</button>
+        </div>
+      </div>
+      <div class="tab-group">
+        <p class="nav-label">동영상</p>
+        <div class="tabs">
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="video">🎬 동영상 압축</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="speed">⏩ 속도 조절</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="trim">✂️ 영상 자르기</button>
+        </div>
+      </div>
     </nav>
 
     <section class="tab-content active" id="imageTab" role="tabpanel">
-      <div class="settings">
-        <span>🎯 압축 목표 <strong class="setting-strong">20MB 이하</strong></span>
-        <span>🦀 Rust/WASM으로 로컬 처리</span>
-      </div>
-      <div class="upload-area" id="uploadArea" tabindex="0" role="button" aria-label="이미지 파일 선택">
-        <div class="icon">📎</div>
-        <div class="text">이미지를 놓거나 클릭해서 선택하세요</div>
-        <div class="subtext">JPEG, PNG, WebP, GIF, BMP 등 · 여러 파일을 한 번에 선택할 수 있습니다</div>
-      </div>
+      <div class="page-heading"><h2>이미지 압축</h2><p>Discord 무료 플랜의 파일당 20MB 기준에 맞춰 여러 이미지를 로컬에서 압축합니다.</p></div>
+      <div class="settings"><span>🎯 압축 목표 <strong class="setting-strong">20MB 이하</strong></span><span>🦀 Rust/WASM으로 로컬 처리</span></div>
+      <div class="upload-area" id="uploadArea" tabindex="0" role="button" aria-label="이미지 파일 선택"><div class="icon">📎</div><div class="text">이미지를 놓거나 클릭해서 선택하세요</div><div class="subtext">JPEG, PNG, WebP, GIF, BMP 등 · 여러 파일을 한 번에 선택할 수 있습니다</div></div>
       <input type="file" id="fileInput" accept="image/*" multiple>
       <div class="results" id="results" aria-live="polite"></div>
     </section>
 
+    <section class="tab-content" id="convertTab" role="tabpanel"><div class="page-heading"><h2>이미지 변환</h2><p>여러 이미지의 형식을 바꾸고 바로 내려받을 수 있습니다.</p></div><div id="converterTool"></div></section>
+    <section class="tab-content" id="paddingTab" role="tabpanel"><div class="page-heading"><h2>여백 편집</h2><p>이미지 하단에 여백을 더하거나, 하단 여백을 잘라냅니다.</p></div><div id="paddingTool"></div></section>
+    <section class="tab-content" id="mergeTab" role="tabpanel"><div class="page-heading"><h2>이미지 병합</h2><p>여러 이미지를 가로 또는 세로로 이어 붙입니다.</p></div><div id="mergeTool"></div></section>
+    <section class="tab-content" id="rotateTab" role="tabpanel"><div class="page-heading"><h2>이미지 회전</h2><p>원하는 각도로 회전하고 투명 또는 색상 배경으로 저장합니다.</p></div><div id="rotateTool"></div></section>
+    <section class="tab-content" id="resizeTab" role="tabpanel"><div class="page-heading"><h2>크기 조절</h2><p>비율을 유지하며 이미지 크기를 바꿉니다.</p></div><div id="resizeTool"></div></section>
+    <section class="tab-content" id="blurTab" role="tabpanel"><div class="page-heading"><h2>흐림 효과</h2><p>원본을 비교하며 블러 강도를 조절합니다.</p></div><div id="blurTool"></div></section>
+    <section class="tab-content" id="overlayTab" role="tabpanel"><div class="page-heading"><h2>이미지 합성</h2><p>레이어를 옮기고 회전·확대해 하나의 이미지로 내보냅니다.</p></div><div id="overlayTool"></div></section>
+    <section class="tab-content" id="colorTab" role="tabpanel"><div class="page-heading"><h2>색상 분석</h2><p>이미지에서 많이 쓰인 HEX 색상과 비율을 확인합니다.</p></div><div id="colorTool"></div></section>
+    <section class="tab-content" id="pixelTab" role="tabpanel"><div class="page-heading"><h2>도트화</h2><p>팔레트 수와 픽셀 크기를 정해 픽셀 아트로 바꿉니다.</p></div><div id="pixelTool"></div></section>
+    <section class="tab-content" id="forensicsTab" role="tabpanel"><div class="page-heading"><h2>이미지 검사</h2><p>재압축 차이, 채널, 노이즈, 선명도 지도를 한눈에 살펴봅니다.</p></div><div id="forensicsTool"></div></section>
+
     <section class="tab-content" id="videoTab" role="tabpanel">
-      <div class="settings">
-        <span>🎯 압축 목표 <strong class="setting-strong">20MB 이하</strong></span>
-        <span>📦 MP4 또는 WebM으로 저장됩니다</span>
-      </div>
-      <div class="upload-area" id="videoUploadArea" tabindex="0" role="button" aria-label="압축할 동영상 파일 선택">
-        <div class="icon">🎬</div>
-        <div class="text">동영상을 놓거나 클릭해서 선택하세요</div>
-        <div class="subtext">MP4, WebM, MOV, AVI 등 · 처리 시간은 영상 길이와 기기에 따라 달라집니다</div>
-      </div>
+      <div class="page-heading"><h2>동영상 압축</h2><p>브라우저가 지원하는 영상 엔진으로 20MB 이하를 목표로 다시 인코딩합니다.</p></div>
+      <div class="settings"><span>🎯 압축 목표 <strong class="setting-strong">20MB 이하</strong></span><span>📦 MP4 또는 WebM으로 저장됩니다</span></div>
+      <div class="upload-area" id="videoUploadArea" tabindex="0" role="button" aria-label="압축할 동영상 파일 선택"><div class="icon">🎬</div><div class="text">동영상을 놓거나 클릭해서 선택하세요</div><div class="subtext">MP4, WebM, MOV, AVI 등 · 처리 시간은 영상 길이와 기기에 따라 달라집니다</div></div>
       <input type="file" id="videoInput" accept="video/*">
       <div class="results" id="videoResults" aria-live="polite"></div>
     </section>
 
     <section class="tab-content" id="speedTab" role="tabpanel">
-      <div class="settings">
-        <span>⏩ 전체 영상 또는 원하는 시간 구간만 속도를 바꿉니다</span>
-        <span>🎯 결과는 20MB 이하를 목표로 저장됩니다</span>
-      </div>
-      <div class="upload-area" id="speedUploadArea" tabindex="0" role="button" aria-label="속도를 조절할 동영상 파일 선택">
-        <div class="icon">⏩</div>
-        <div class="text">속도를 조절할 동영상을 선택하세요</div>
-        <div class="subtext">파일을 선택한 뒤 속도와 적용 범위를 설정할 수 있습니다</div>
-      </div>
+      <div class="page-heading"><h2>속도 조절</h2><p>전체 영상 또는 지정한 구간만 0.25배~4배로 바꿉니다.</p></div>
+      <div class="settings"><span>⏩ 전체 영상 또는 원하는 시간 구간만 속도를 바꿉니다</span><span>🎯 결과는 20MB 이하를 목표로 저장됩니다</span></div>
+      <div class="upload-area" id="speedUploadArea" tabindex="0" role="button" aria-label="속도를 조절할 동영상 파일 선택"><div class="icon">⏩</div><div class="text">속도를 조절할 동영상을 선택하세요</div><div class="subtext">파일을 선택한 뒤 속도와 적용 범위를 설정할 수 있습니다</div></div>
       <input type="file" id="speedInput" accept="video/*">
-
       <div class="tool-controls" id="speedControls" hidden>
-        <div class="tool-file-info" id="speedFileInfo"></div>
-        <video class="editor-preview" id="speedPreview" controls playsinline></video>
-        <div class="field-grid">
-          <label class="field" for="speedRate">속도 (배)
-            <input id="speedRate" type="number" value="2" min="0.25" max="4" step="0.05" inputmode="decimal" list="speedRates">
-          </label>
-          <label class="field" for="speedPreset">자주 쓰는 속도
-            <select id="speedPreset">
-              <option value="">직접 입력</option>
-              <option value="0.25">0.25배</option>
-              <option value="0.5">0.5배</option>
-              <option value="0.75">0.75배</option>
-              <option value="1.25">1.25배</option>
-              <option value="1.5">1.5배</option>
-              <option value="2">2배</option>
-              <option value="3">3배</option>
-              <option value="4">4배</option>
-            </select>
-          </label>
-        </div>
-        <datalist id="speedRates">
-          <option value="0.25"><option value="0.5"><option value="0.75"><option value="1"><option value="1.25"><option value="1.5"><option value="2"><option value="3"><option value="4">
-        </datalist>
-        <div class="mode-options" aria-label="속도 적용 범위">
-          <label class="mode-option"><input type="radio" name="speedScope" value="whole" checked> 전체 영상에 적용</label>
-          <label class="mode-option"><input type="radio" name="speedScope" value="range"> 지정 구간에만 적용</label>
-        </div>
-        <div class="range-fields" id="speedRangeFields" hidden>
-          <div class="field-grid">
-            <label class="field" for="speedStart">구간 시작 (0.1초 단위)
-              <input id="speedStart" type="number" value="0" min="0" step="0.1" inputmode="decimal">
-            </label>
-            <label class="field" for="speedEnd">구간 종료 (0.1초 단위)
-              <input id="speedEnd" type="number" min="0" step="0.1" inputmode="decimal">
-            </label>
-          </div>
-        </div>
-        <p class="estimate" id="speedEstimate"></p>
-        <p class="help-text">시간은 0.1초 단위로 입력할 수 있습니다. 속도는 0.25배부터 4배까지 설정할 수 있으며, 실제 구간 경계에는 프레임 단위의 아주 작은 오차가 생길 수 있습니다.</p>
-        <button class="primary-btn" id="speedProcessBtn" type="button">속도 적용하기</button>
+        <div class="tool-file-info" id="speedFileInfo"></div><video class="editor-preview" id="speedPreview" controls playsinline></video>
+        <div class="field-grid"><label class="field" for="speedRate">속도 (배)<input id="speedRate" type="number" value="2" min="0.25" max="4" step="0.05" inputmode="decimal" list="speedRates"></label><label class="field" for="speedPreset">자주 쓰는 속도<select id="speedPreset"><option value="">직접 입력</option><option value="0.25">0.25배</option><option value="0.5">0.5배</option><option value="0.75">0.75배</option><option value="1.25">1.25배</option><option value="1.5">1.5배</option><option value="2">2배</option><option value="3">3배</option><option value="4">4배</option></select></label></div>
+        <datalist id="speedRates"><option value="0.25"><option value="0.5"><option value="0.75"><option value="1"><option value="1.25"><option value="1.5"><option value="2"><option value="3"><option value="4"></datalist>
+        <div class="mode-options" aria-label="속도 적용 범위"><label class="mode-option"><input type="radio" name="speedScope" value="whole" checked> 전체 영상에 적용</label><label class="mode-option"><input type="radio" name="speedScope" value="range"> 지정 구간에만 적용</label></div>
+        <div class="range-fields" id="speedRangeFields" hidden><div class="field-grid"><label class="field" for="speedStart">구간 시작 (0.1초 단위)<input id="speedStart" type="number" value="0" min="0" step="0.1" inputmode="decimal"></label><label class="field" for="speedEnd">구간 종료 (0.1초 단위)<input id="speedEnd" type="number" min="0" step="0.1" inputmode="decimal"></label></div></div>
+        <p class="estimate" id="speedEstimate"></p><p class="help-text">시간은 0.1초 단위로 입력할 수 있습니다. 실제 구간 경계에는 프레임 단위의 아주 작은 오차가 생길 수 있습니다.</p><button class="primary-btn" id="speedProcessBtn" type="button">속도 적용하기</button>
       </div>
       <div class="results" id="speedResults" aria-live="polite"></div>
     </section>
 
     <section class="tab-content" id="trimTab" role="tabpanel">
-      <div class="settings">
-        <span>✂️ 필요한 구간만 정확히 다시 인코딩합니다</span>
-        <span>🎯 결과는 20MB 이하를 목표로 저장됩니다</span>
-      </div>
-      <div class="upload-area" id="trimUploadArea" tabindex="0" role="button" aria-label="자를 동영상 파일 선택">
-        <div class="icon">✂️</div>
-        <div class="text">자를 동영상을 선택하세요</div>
-        <div class="subtext">미리보기를 보며 시작 시간과 종료 시간을 0.1초 단위로 입력할 수 있습니다</div>
-      </div>
+      <div class="page-heading"><h2>영상 자르기</h2><p>필요한 시간 구간만 다시 인코딩해 저장합니다.</p></div>
+      <div class="settings"><span>✂️ 필요한 구간만 정확히 다시 인코딩합니다</span><span>🎯 결과는 20MB 이하를 목표로 저장됩니다</span></div>
+      <div class="upload-area" id="trimUploadArea" tabindex="0" role="button" aria-label="자를 동영상 파일 선택"><div class="icon">✂️</div><div class="text">자를 동영상을 선택하세요</div><div class="subtext">미리보기를 보며 시작 시간과 종료 시간을 0.1초 단위로 입력할 수 있습니다</div></div>
       <input type="file" id="trimInput" accept="video/*">
-
       <div class="tool-controls" id="trimControls" hidden>
-        <div class="tool-file-info" id="trimFileInfo"></div>
-        <video class="editor-preview" id="trimPreview" controls playsinline></video>
-        <div class="field-grid">
-          <label class="field" for="trimStart">시작 시간 (0.1초 단위)
-            <input id="trimStart" type="number" value="0" min="0" step="0.1" inputmode="decimal">
-          </label>
-          <label class="field" for="trimEnd">종료 시간 (0.1초 단위)
-            <input id="trimEnd" type="number" min="0" step="0.1" inputmode="decimal">
-          </label>
-        </div>
-        <p class="estimate" id="trimEstimate"></p>
-        <p class="help-text">시간은 0.1초 단위로 입력할 수 있습니다. 입력한 시작 시간부터 종료 시간 직전까지 저장하며, 종료 시간은 전체 영상 길이를 넘을 수 없습니다.</p>
-        <button class="primary-btn" id="trimProcessBtn" type="button">선택 구간 자르기</button>
+        <div class="tool-file-info" id="trimFileInfo"></div><video class="editor-preview" id="trimPreview" controls playsinline></video>
+        <div class="field-grid"><label class="field" for="trimStart">시작 시간 (0.1초 단위)<input id="trimStart" type="number" value="0" min="0" step="0.1" inputmode="decimal"></label><label class="field" for="trimEnd">종료 시간 (0.1초 단위)<input id="trimEnd" type="number" min="0" step="0.1" inputmode="decimal"></label></div>
+        <p class="estimate" id="trimEstimate"></p><p class="help-text">입력한 시작 시간부터 종료 시간 직전까지 저장하며, 종료 시간은 전체 영상 길이를 넘을 수 없습니다.</p><button class="primary-btn" id="trimProcessBtn" type="button">선택 구간 자르기</button>
       </div>
       <div class="results" id="trimResults" aria-live="polite"></div>
     </section>
 
-    <p class="footer-note">🔒 모든 처리는 이 브라우저 안에서 완료됩니다. 압축, 속도 조절, 자르기 결과는 Discord 무료 플랜의 20MB 제한을 기준으로 저장합니다.</p>
+    <p class="footer-note">🔒 모든 파일은 이 브라우저 안에서 처리됩니다. Discord 20MB 목표는 이미지·동영상 압축 및 영상 편집 결과에만 적용됩니다.</p>
     <div class="log-actions"><button id="copyLogBtn" type="button">📋 처리 로그 복사</button></div>
   </main>
 
   <div class="processing-overlay" id="processingOverlay" aria-live="assertive" aria-modal="true" role="dialog">
-    <div class="processing-text" id="processingText">처리 중입니다...</div>
-    <div class="processing-subtext" id="processingSubtext">잠시만 기다려 주세요.</div>
-    <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
-    <div class="progress-percent" id="progressPercent">0%</div>
-    <div class="file-counter" id="fileCounter"></div>
-    <button class="cancel-btn" id="cancelBtn" type="button">✕ 취소</button>
+    <div class="processing-text" id="processingText">처리 중입니다...</div><div class="processing-subtext" id="processingSubtext">잠시만 기다려 주세요.</div><div class="progress-bar"><div class="fill" id="progressFill"></div></div><div class="progress-percent" id="progressPercent">0%</div><div class="file-counter" id="fileCounter"></div><button class="cancel-btn" id="cancelBtn" type="button">✕ 취소</button>
   </div>
-
   <script>
     window.addEventListener('error', function (event) {
       if (event.message && event.message.includes('import')) {
-        document.body.innerHTML = '<div style="max-width:560px;margin:80px auto;padding:24px;color:#eef2ff;font-family:sans-serif;text-align:center"><h2>⚠️ 앱을 불러오지 못했습니다</h2><p style="color:#aab5ce;line-height:1.6">페이지를 새로고침한 뒤 다시 시도해 주세요.</p></div>';
+        document.body.innerHTML = '<div style="max-width:560px;margin:80px auto;padding:24px;color:#37261d;font-family:sans-serif;text-align:center"><h2>⚠️ 앱을 불러오지 못했습니다</h2><p style="color:#7d685a;line-height:1.6">페이지를 새로고침한 뒤 다시 시도해 주세요.</p></div>';
       }
     });
   </script>

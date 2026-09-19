@@ -1,7 +1,11 @@
 /**
- * Discord 20MB 미디어 도구의 통합 진입점
+ * Media Studio의 통합 진입점
  * 모든 사용자 파일은 브라우저 안에서만 처리한다.
  */
+
+import { initImageTools } from './image-tools.js';
+import { initImageAnalysisTools } from './image-analysis.js';
+import { initImageOverlayTool } from './image-overlayer.js';
 
 const DISCORD_FREE_LIMIT_MB = 20;
 const DISCORD_FREE_LIMIT_BYTES = DISCORD_FREE_LIMIT_MB * 1024 * 1024;
@@ -25,16 +29,33 @@ let videoEditorModule = null;
 
 const appLogBuffer = [];
 
-tabs.forEach(tab => {
-  tab.addEventListener('click', () => {
-    const target = tab.dataset.tab;
-    tabs.forEach(item => {
-      const active = item === tab;
-      item.classList.toggle('active', active);
-      item.setAttribute('aria-selected', String(active));
-    });
-    tabContents.forEach(content => content.classList.toggle('active', content.id === `${target}Tab`));
+function activateTab(target, { syncHash = true } = {}) {
+  const activeTab = Array.from(tabs).find(tab => tab.dataset.tab === target);
+  if (!activeTab) return false;
+
+  tabs.forEach(tab => {
+    const active = tab === activeTab;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
   });
+  tabContents.forEach(content => content.classList.toggle('active', content.id === `${target}Tab`));
+
+  if (syncHash && location.hash !== `#${target}`) {
+    history.replaceState(null, '', `#${target}`);
+  }
+  window.dispatchEvent(new CustomEvent('media-tool-tabchange', { detail: { target } }));
+  if (target === 'overlay') {
+    document.getElementById('overlayTool')?.dispatchEvent(new Event('mio:activate'));
+  }
+  return true;
+}
+
+tabs.forEach(tab => tab.addEventListener('click', () => activateTab(tab.dataset.tab)));
+
+const initialTab = decodeURIComponent(location.hash.slice(1));
+if (initialTab) activateTab(initialTab, { syncHash: false });
+window.addEventListener('hashchange', () => {
+  activateTab(decodeURIComponent(location.hash.slice(1)), { syncHash: false });
 });
 
 function appLog(level, message) {
@@ -88,7 +109,7 @@ cancelBtn.addEventListener('click', () => {
 copyLogBtn.addEventListener('click', async () => {
   const videoLogs = videoCompressorModule?.getLogs?.() || '';
   const text = [
-    '=== Discord 20MB 미디어 도구 처리 로그 ===',
+    '=== Media Studio 처리 로그 ===',
     `주소: ${location.href}`,
     `브라우저: ${navigator.userAgent}`,
     `시각: ${new Date().toISOString()}`,
@@ -748,3 +769,17 @@ function escapeHtml(value) {
 ensureWasm().catch(error => {
   console.error('이미지 엔진 초기화 오류:', error);
 });
+
+function initializeExtension(name, initializer) {
+  try {
+    initializer();
+    appLog('정보', `${name} 도구를 준비했습니다.`);
+  } catch (error) {
+    console.error(`${name} 도구 초기화 오류:`, error);
+    appLog('오류', `${name} 도구 초기화 실패: ${error.message}`);
+  }
+}
+
+initializeExtension('이미지 편집', initImageTools);
+initializeExtension('이미지 분석', initImageAnalysisTools);
+initializeExtension('이미지 합성', initImageOverlayTool);
