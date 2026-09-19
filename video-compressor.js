@@ -6,17 +6,10 @@
  * 2. Canvas + MediaRecorder（フォールバック・全環境対応）
  */
 
-// Discordプラン別の上限（2026年8月時点の公式仕様）
-// 無料: 20MB / Nitro Basic: 50MB / Nitro: 500MB
-let TARGET_SIZE_MB = 20;
-let TARGET_SIZE_BYTES = TARGET_SIZE_MB * 1024 * 1024;
-let ACCEPT_SIZE_BYTES = 19 * 1024 * 1024; // 安全マージンを10%→5%に縮小し、その分ビットレートを高くする
-
-function applyTargetSize(mb) {
-  TARGET_SIZE_MB = mb;
-  TARGET_SIZE_BYTES = mb * 1024 * 1024;
-  ACCEPT_SIZE_BYTES = Math.floor(mb * 0.95) * 1024 * 1024;
-}
+// Discord 무료 플랜의 파일당 20MB 제한으로 고정한다.
+const TARGET_SIZE_MB = 20;
+const TARGET_SIZE_BYTES = TARGET_SIZE_MB * 1024 * 1024;
+const ACCEPT_SIZE_BYTES = 19 * 1024 * 1024;
 
 // ============ キャンセル制御 ============
 let cancelRequested = false;
@@ -27,7 +20,7 @@ export function requestCancel() {
 
 // 再圧縮の最大試行回数（1回目＋再試行2回＝計3回）
 const MAX_ATTEMPTS = 3;
-export const CANCEL_MESSAGE = 'キャンセルされました';
+export const CANCEL_MESSAGE = '작업이 취소되었습니다.';
 
 // ============ ログ管理（エラー追跡用バッファ＋console） ============
 // ログはメモリに蓄積し、「ログをコピー」ボタンで一括取得できる
@@ -64,26 +57,24 @@ function getEngine() {
 
 // ============ 動画圧縮メイン ============
 
-export async function compressVideo(file, onProgress, onStatus, targetSizeMB = 20) {
+export async function compressVideo(file, onProgress, onStatus) {
   // キャンセル状態をリセット
   cancelRequested = false;
-  // プラン別の目標サイズを適用
-  applyTargetSize(targetSizeMB);
-  addDebugLog('INFO', `動画圧縮開始: ${truncateName(file.name)} (${(file.size / 1048576).toFixed(2)}MB) — 目標${TARGET_SIZE_MB}MB`);
+  addDebugLog('INFO', `동영상 압축 시작: ${truncateName(file.name)} (${(file.size / 1048576).toFixed(2)}MB) — 목표 ${TARGET_SIZE_MB}MB`);
 
   const engine = getEngine();
-  addDebugLog('INFO', `エンジン: ${engine}`);
+  addDebugLog('INFO', `엔진: ${engine}`);
 
   // 動画メタデータ取得と並行してWebCodecs用ライブラリの読み込みを開始する
   const libsPreload = engine === 'webcodecs' ? preloadWebCodecsLibs() : null;
 
-  onStatus?.('動画情報を解析中...');
+  onStatus?.('동영상 정보를 분석하는 중...');
   const videoInfo = await getVideoInfo(file);
   addDebugLog('INFO', `入力: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration.toFixed(1)}秒, ${videoInfo.fps}fps`);
 
   // 元ファイルが既に目標サイズ以下ならそのまま返す
   if (file.size <= TARGET_SIZE_BYTES) {
-    addDebugLog('INFO', `元ファイルが${(file.size / 1024 / 1024).toFixed(2)}MB — ${TARGET_SIZE_MB}MB以下のため圧縮不要`);
+    addDebugLog('INFO', `원본이 ${(file.size / 1024 / 1024).toFixed(2)}MB로 ${TARGET_SIZE_MB}MB 이하라 압축이 필요하지 않습니다.`);
     return { blob: file, originalSize: file.size, compressedSize: file.size };
   }
 
@@ -91,19 +82,17 @@ export async function compressVideo(file, onProgress, onStatus, targetSizeMB = 2
   const audioBitrate = 64000;
   const targetTotalBitrate = Math.floor((ACCEPT_SIZE_BYTES * 8) / videoInfo.duration);
   const targetVideoBitrate = Math.max(100000, targetTotalBitrate - audioBitrate);
-  addDebugLog('INFO', `目標ビットレート: video=${(targetVideoBitrate / 1000).toFixed(0)}kbps`);
+  addDebugLog('INFO', `목표 비트레이트: video=${(targetVideoBitrate / 1000).toFixed(0)}kbps`);
 
-  // 解像度スケール（プラン別：無料は1280px、Basicは1920px、Nitroは元解像度維持）
-  let maxResolution = 1280;
-  if (TARGET_SIZE_MB >= 500) maxResolution = Infinity;
-  else if (TARGET_SIZE_MB >= 50) maxResolution = 1920;
+  // 무료 플랜의 20MB 목표에 맞춰 긴 변은 최대 1280px로 제한한다.
+  const maxResolution = 1280;
   let targetWidth = videoInfo.width;
   let targetHeight = videoInfo.height;
   if (targetWidth > maxResolution || targetHeight > maxResolution) {
     const scale = maxResolution / Math.max(targetWidth, targetHeight);
     targetWidth = Math.round(targetWidth * scale / 2) * 2;
     targetHeight = Math.round(targetHeight * scale / 2) * 2;
-    addDebugLog('INFO', `解像度ダウンスケール: ${targetWidth}x${targetHeight}`);
+    addDebugLog('INFO', `해상도 축소: ${targetWidth}x${targetHeight}`);
   }
 
   if (engine === 'webcodecs') {
@@ -112,7 +101,7 @@ export async function compressVideo(file, onProgress, onStatus, targetSizeMB = 2
     } catch (err) {
       // キャンセル時はフォールバックしない
       if (cancelRequested || err.message === CANCEL_MESSAGE) throw err;
-      addDebugLog('WARN', `WebCodecs失敗、MediaRecorderにフォールバック: ${err.message}`);
+      addDebugLog('WARN', `WebCodecs 실패, MediaRecorder로 전환: ${err.message}`);
       // フォールバック
       return await compressWithMediaRecorder(file, videoInfo, targetWidth, targetHeight, targetVideoBitrate, audioBitrate, onProgress, onStatus, 0);
     }
@@ -127,21 +116,21 @@ export async function compressVideo(file, onProgress, onStatus, targetSizeMB = 2
 
 async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight, videoBitrate, onProgress, onStatus, attempt = 0, libsPreload = null) {
   if (cancelRequested) throw new Error(CANCEL_MESSAGE);
-  addDebugLog('LOAD', 'WebCodecs エンジン起動...');
+  addDebugLog('LOAD', 'WebCodecs 엔진 시작...');
 
   // Phase 1: ライブラリ読み込み (0〜5%)
   // 先読みしておいたPromiseを待つ（再試行時はキャッシュ済みのため即座に解決する）
-  onStatus?.('MP4パーサーを読み込み中...');
+  onStatus?.('MP4 분석기를 불러오는 중...');
   onProgress?.(2);
   await (libsPreload || preloadWebCodecsLibs());
-  addDebugLog('LOAD', 'MP4解析開始');
+  addDebugLog('LOAD', 'MP4 분석 시작');
   onProgress?.(5);
 
   // Phase 2: MP4デマックス (5〜15%)
-  onStatus?.('動画を解析中...');
+  onStatus?.('동영상을 분석하는 중...');
   onProgress?.(8);
   const { chunks, audioChunks, decoderConfig, audioDecoderConfig, videoTrack } = await demuxMP4(file);
-  addDebugLog('INFO', `MP4解析完了: 映像${chunks.length}チャンク${audioChunks.length > 0 ? ` + 音声${audioChunks.length}チャンク` : '（音声なし）'}`);
+  addDebugLog('INFO', `MP4 분석 완료: 영상 ${chunks.length}개 청크${audioChunks.length > 0 ? ` + 오디오 ${audioChunks.length}개 청크` : ' (오디오 없음)'}`);
   onProgress?.(15);
 
   // ===== 音込みの正確なビットレート計算 =====
@@ -155,10 +144,10 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
       // （再帰時は渡ってきた逆算値＝VBRブレ補正済みを優先すべきなので再計算しない）
       const durationSec = Math.max(1, videoInfo.duration);
       const recalc = Math.floor(((ACCEPT_SIZE_BYTES - audioTotalBytes) * 8) / durationSec);
-      addDebugLog('INFO', `音声実サイズ: ${(audioTotalBytes / 1048576).toFixed(2)}MB。映像ビットレートを ${(videoBitrate / 1000).toFixed(0)}kbps → ${(Math.max(100000, recalc) / 1000).toFixed(0)}kbps に再計算（音込み）`);
+      addDebugLog('INFO', `실제 오디오 크기: ${(audioTotalBytes / 1048576).toFixed(2)}MB. 오디오를 포함해 영상 비트레이트를 ${(videoBitrate / 1000).toFixed(0)}kbps → ${(Math.max(100000, recalc) / 1000).toFixed(0)}kbps로 다시 계산했습니다.`);
       videoBitrate = Math.max(100000, recalc);
     } else {
-      addDebugLog('INFO', `音声実サイズ: ${(audioTotalBytes / 1048576).toFixed(2)}MB（再試行${attempt + 1}回目は逆算値 ${(videoBitrate / 1000).toFixed(0)}kbps を使用）`);
+      addDebugLog('INFO', `실제 오디오 크기: ${(audioTotalBytes / 1048576).toFixed(2)}MB (재시도 ${attempt + 1}회에는 역산값 ${(videoBitrate / 1000).toFixed(0)}kbps 사용)`);
     }
   }
 
@@ -170,7 +159,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
     supported = await VideoDecoder.isConfigSupported(decoderConfig);
   }
   if (!supported.supported) {
-    throw new Error(`デコーダ非対応: ${decoderConfig.codec}`);
+    throw new Error(`지원하지 않는 동영상 코덱입니다: ${decoderConfig.codec}`);
   }
 
   // Step 3: エンコーダ設定
@@ -204,10 +193,10 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
       encSupported2 = await VideoEncoder.isConfigSupported(encoderConfig);
     }
     if (!encSupported2.supported) {
-      throw new Error('H.264エンコーダ非対応');
+      throw new Error('이 브라우저는 H.264 인코더를 지원하지 않습니다.');
     }
   }
-  addDebugLog('INFO', `エンコーダ設定: codec=${encoderConfig.codec}, ${targetWidth}x${targetHeight}, ${(videoBitrate / 1000).toFixed(0)}kbps, hw=${encoderConfig.hardwareAcceleration}`);
+  addDebugLog('INFO', `인코더 설정: codec=${encoderConfig.codec}, ${targetWidth}x${targetHeight}, ${(videoBitrate / 1000).toFixed(0)}kbps, hw=${encoderConfig.hardwareAcceleration}`);
   onProgress?.(18);
 
   // Step 4: Muxer設定（mp4-muxer）
@@ -235,7 +224,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
   });
 
   // Step 5: デコード → リサイズ → エンコード パイプライン
-  onStatus?.('圧縮中...');
+  onStatus?.('압축하는 중...');
   onProgress?.(20);
 
   // Canvas for resizing
@@ -266,7 +255,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
         encodedChunks.push(chunk);
       },
       error: (e) => {
-        addDebugLog('ERROR', `エンコードエラー: ${e.message}`);
+        addDebugLog('ERROR', `인코딩 오류: ${e.message}`);
         reject(e);
       },
     });
@@ -295,7 +284,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
               frame.displayHeight === videoInfo.width &&
               frame.displayWidth !== frame.displayHeight) {
             isRotated = true;
-            addDebugLog('INFO', `回転メタデータ検出: フレーム実サイズ ${frame.displayWidth}x${frame.displayHeight}（回転前）→ 90°回転して描画`);
+            addDebugLog('INFO', `회전 메타데이터 감지: 프레임 ${frame.displayWidth}x${frame.displayHeight}를 90° 회전해 그립니다.`);
           }
         }
 
@@ -338,7 +327,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
 
         if (decodedCount === totalChunks) {
           onProgress?.(90);
-          addDebugLog('STEP', `全${totalChunks}フレーム処理完了`);
+          addDebugLog('STEP', `전체 ${totalChunks}개 프레임 처리 완료`);
         }
 
         // すべてのチャンクを処理し終えたらエンコーダをフラッシュ
@@ -356,16 +345,16 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
                   for (const aChunk of audioChunks) {
                     muxer.addAudioChunk(aChunk, { decoderConfig: audioDecoderConfig });
                   }
-                  addDebugLog('INFO', `音声を出力に追加: ${audioChunks.length}チャンク (${(audioTotalBytes / 1048576).toFixed(2)}MB)`);
+                  addDebugLog('INFO', `출력에 오디오 추가: ${audioChunks.length}개 청크 (${(audioTotalBytes / 1048576).toFixed(2)}MB)`);
                 } catch (e) {
-                  addDebugLog('WARN', `音声追加失敗（音声なしで続行）: ${e.message}`);
+                  addDebugLog('WARN', `오디오 추가 실패(무음으로 계속): ${e.message}`);
                 }
               }
               muxer.finalize();
               onProgress?.(99);
 
               const blob = new Blob([muxerTarget.buffer], { type: 'video/mp4' });
-              addDebugLog('INFO', `WebCodecs圧縮完了: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+              addDebugLog('INFO', `WebCodecs 압축 완료: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
               onProgress?.(100);
 
               if (blob.size > TARGET_SIZE_BYTES) {
@@ -373,17 +362,17 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
                 if (cancelRequested) { reject(new Error(CANCEL_MESSAGE)); return; }
                 // 試行回数上限
                 if (attempt + 1 >= MAX_ATTEMPTS) {
-                  addDebugLog('WARN', `${MAX_ATTEMPTS}回試行したが${TARGET_SIZE_MB}MB未達。最終結果を妥協案として返却`);
+                  addDebugLog('WARN', `${MAX_ATTEMPTS}회 시도했지만 ${TARGET_SIZE_MB}MB에 맞추지 못했습니다. 현재 결과를 반환합니다.`);
                   resolve({ blob, originalSize: file.size, compressedSize: blob.size, degraded: true, engine: 'webcodecs' });
                   return;
                 }
-                addDebugLog('WARN', `サイズ超過 (${(blob.size / 1024 / 1024).toFixed(2)}MB > ${TARGET_SIZE_MB}MB)。実測から逆算して再圧縮...`);
+                addDebugLog('WARN', `크기 초과 (${(blob.size / 1024 / 1024).toFixed(2)}MB > ${TARGET_SIZE_MB}MB). 실제 크기를 기준으로 다시 압축합니다...`);
                 // 実測オーバー率から逆算（0.95は安全係数）※音声分を差し引いて映像のみで計算
                 const videoActualBytes = Math.max(1, blob.size - audioTotalBytes);
                 const lowerBitrate = Math.max(50000, Math.floor(videoBitrate * 0.95 * (ACCEPT_SIZE_BYTES - audioTotalBytes) / videoActualBytes));
                 const smallerWidth = Math.max(320, Math.round(targetWidth * 0.75 / 2) * 2);
                 const smallerHeight = Math.max(240, Math.round(targetHeight * 0.75 / 2) * 2);
-                onStatus?.(`品質を調整中... (${attempt + 2}/${MAX_ATTEMPTS}回目)`);
+                onStatus?.(`품질을 조정하는 중... (${attempt + 2}/${MAX_ATTEMPTS}회)`);
                 compressWithWebCodecs(file, videoInfo, smallerWidth, smallerHeight, lowerBitrate, onProgress, onStatus, attempt + 1, libsPreload)
                   .then(resolve).catch(reject);
               } else {
@@ -394,7 +383,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
         }
       },
       error: (e) => {
-        addDebugLog('ERROR', `デコードエラー: ${e.message}`);
+        addDebugLog('ERROR', `디코딩 오류: ${e.message}`);
         reject(e);
       },
     });
@@ -446,12 +435,12 @@ async function demuxMP4(file) {
 
     mp4box.onReady = (info) => {
       if (!info.videoTracks || info.videoTracks.length === 0) {
-        reject(new Error('映像トラックが見つかりません'));
+        reject(new Error('영상 트랙을 찾지 못했습니다.'));
         return;
       }
 
       videoTrack = info.videoTracks[0];
-      addDebugLog('INFO', `映像: ${videoTrack.video.width}x${videoTrack.video.height}, codec=${videoTrack.codec}`);
+      addDebugLog('INFO', `영상: ${videoTrack.video.width}x${videoTrack.video.height}, codec=${videoTrack.codec}`);
 
       // ===== 音声トラック検出（AACのみ対応）=====
       if (info.audioTracks && info.audioTracks.length > 0) {
@@ -459,13 +448,13 @@ async function demuxMP4(file) {
         if (at.codec && at.codec.startsWith('mp4a')) {
           audioTrack = at;
           audioDone = false;
-          addDebugLog('INFO', `元動画の音声: AAC ${at.audio.channel_count}ch ${at.audio.sample_rate}Hz → そのまま出力にコピー`);
+          addDebugLog('INFO', `원본 오디오: AAC ${at.audio.channel_count}ch ${at.audio.sample_rate}Hz → 그대로 출력에 복사`);
           mp4box.setExtractionOptions(at.id, null, { nbSamples: 200 });
         } else {
-          addDebugLog('WARN', `元動画の音声は${at.codec}形式（非対応）→ 音声なしで出力されます`);
+          addDebugLog('WARN', `원본 오디오는 ${at.codec} 형식(미지원)이라 무음으로 출력됩니다.`);
         }
       } else {
-        addDebugLog('WARN', '元動画に音声トラックがありません（無音で出力）');
+        addDebugLog('WARN', '원본에 오디오 트랙이 없습니다(무음으로 출력).');
       }
 
       // デコーダ設定を準備
@@ -551,11 +540,11 @@ async function demuxMP4(file) {
                   description: asc,
                 };
               } else {
-                addDebugLog('WARN', 'AudioSpecificConfig抽出失敗。muxerの自動生成に任せる');
+                addDebugLog('WARN', 'AudioSpecificConfig 추출 실패. muxer의 자동 생성을 사용합니다.');
               }
             }
           } catch (e) {
-            addDebugLog('WARN', `音声description取得失敗、音声なしで続行: ${e.message}`);
+            addDebugLog('WARN', `오디오 description을 읽지 못해 무음으로 계속합니다: ${e.message}`);
             audioChunks.length = 0;
           }
         }
@@ -573,7 +562,7 @@ async function demuxMP4(file) {
       mp4box.appendBuffer(buffer);
       mp4box.flush();
     };
-    reader.onerror = () => reject(new Error('ファイル読み込みエラー'));
+    reader.onerror = () => reject(new Error('파일을 읽는 중 오류가 발생했습니다.'));
     reader.readAsArrayBuffer(file);
   });
 }
@@ -614,7 +603,7 @@ function extractAudioSpecificConfig(esdsContent) {
 function getDecoderDescription(file, track) {
   const trak = file.getTrackById(track.id);
   if (!trak || !trak.mdia || !trak.mdia.minf || !trak.mdia.minf.stbl || !trak.mdia.minf.stbl.stsd) {
-    addDebugLog('WARN', `description: trak取得失敗`);
+    addDebugLog('WARN', 'description: trak를 가져오지 못했습니다.');
     return undefined;
   }
   for (const entry of trak.mdia.minf.stbl.stsd.entries) {
@@ -627,7 +616,7 @@ function getDecoderDescription(file, track) {
       return description;
     }
   }
-  addDebugLog('WARN', 'avcC/hvcC/vpcC/av1C/esds boxが見つかりません');
+  addDebugLog('WARN', 'avcC/hvcC/vpcC/av1C/esds 상자를 찾지 못했습니다.');
   return undefined;
 }
 
@@ -635,7 +624,7 @@ function getDecoderDescription(file, track) {
 
 async function compressWithMediaRecorder(file, videoInfo, targetWidth, targetHeight, videoBitrate, audioBitrate, onProgress, onStatus, attempt = 0) {
   if (cancelRequested) throw new Error(CANCEL_MESSAGE);
-  addDebugLog('LOAD', 'MediaRecorder エンジン起動（フォールバック）...');
+  addDebugLog('LOAD', 'MediaRecorder 엔진 시작(대체 경로)...');
 
   const video = document.createElement('video');
   video.src = URL.createObjectURL(file);
@@ -648,7 +637,7 @@ async function compressWithMediaRecorder(file, videoInfo, targetWidth, targetHei
 
   await new Promise((resolve, reject) => {
     video.onloadedmetadata = resolve;
-    video.onerror = () => reject(new Error('動画の読み込みに失敗'));
+    video.onerror = () => reject(new Error('동영상을 불러오지 못했습니다.'));
   });
 
   const canvas = document.createElement('canvas');
@@ -683,7 +672,7 @@ async function compressWithMediaRecorder(file, videoInfo, targetWidth, targetHei
       break;
     }
   }
-  if (!mimeType) throw new Error('対応する動画エンコーダが見つかりません');
+  if (!mimeType) throw new Error('지원하는 동영상 인코더를 찾지 못했습니다.');
 
   const recorder = new MediaRecorder(combinedStream, {
     mimeType,
@@ -694,15 +683,15 @@ async function compressWithMediaRecorder(file, videoInfo, targetWidth, targetHei
   const chunks = [];
   recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
-  onStatus?.('圧縮中... (MediaRecorder)');
+  onStatus?.('압축하는 중... (MediaRecorder)');
   onProgress?.(15);
   recorder.start(100);
 
   video.currentTime = 0;
-  // 再生速度を上げて処理時間を短縮（音は出ないから問題なし）
-  video.playbackRate = Math.min(4, videoInfo.duration > 60 ? 4 : 2);
+  // 압축 결과의 재생 시간과 음성 싱크를 유지한다.
+  video.playbackRate = 1;
   await video.play();
-  addDebugLog('STEP', `録画開始（${video.playbackRate}倍速）`);
+  addDebugLog('STEP', '녹화 시작(원본 속도)');
 
   const startTime = performance.now();
   let frameCount = 0;
@@ -718,7 +707,7 @@ async function compressWithMediaRecorder(file, videoInfo, targetWidth, targetHei
     ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
     frameCount++;
     const elapsed = (performance.now() - startTime) / 1000;
-    const expectedDuration = videoInfo.duration / video.playbackRate;
+    const expectedDuration = videoInfo.duration;
     // 15%〜95%をマッピング
     const progress = 15 + Math.min(elapsed / expectedDuration, 1) * 80;
     onProgress?.(progress);
@@ -744,21 +733,21 @@ async function compressWithMediaRecorder(file, videoInfo, targetWidth, targetHei
 
   const blob = new Blob(chunks, { type: mimeType });
   onProgress?.(100);
-  addDebugLog('INFO', `MediaRecorder圧縮完了: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+  addDebugLog('INFO', `MediaRecorder 압축 완료: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
 
   if (blob.size > TARGET_SIZE_BYTES) {
     // 試行回数上限
     if (attempt + 1 >= MAX_ATTEMPTS) {
-      addDebugLog('WARN', `${MAX_ATTEMPTS}回試行したが${TARGET_SIZE_MB}MB未達。最終結果を妥協案として返却`);
+      addDebugLog('WARN', `${MAX_ATTEMPTS}회 시도했지만 ${TARGET_SIZE_MB}MB에 맞추지 못했습니다. 현재 결과를 반환합니다.`);
       return { blob, originalSize: file.size, compressedSize: blob.size, degraded: true, engine: 'mediarecorder' };
     }
-    addDebugLog('WARN', `サイズ超過 (${(blob.size / 1024 / 1024).toFixed(2)}MB > ${TARGET_SIZE_MB}MB)。実測から逆算して再圧縮...`);
+    addDebugLog('WARN', `크기 초과 (${(blob.size / 1024 / 1024).toFixed(2)}MB > ${TARGET_SIZE_MB}MB). 실제 크기를 기준으로 다시 압축합니다...`);
     // 実測オーバー率から逆算（0.95は安全係数）
     const overshootRatio = blob.size / ACCEPT_SIZE_BYTES;
     const lowerBitrate = Math.max(50000, Math.floor(videoBitrate * 0.95 / overshootRatio));
     const smallerWidth = Math.max(320, Math.round(targetWidth * 0.75 / 2) * 2);
     const smallerHeight = Math.max(240, Math.round(targetHeight * 0.75 / 2) * 2);
-    onStatus?.(`品質を調整中... (${attempt + 2}/${MAX_ATTEMPTS}回目)`);
+    onStatus?.(`품질을 조정하는 중... (${attempt + 2}/${MAX_ATTEMPTS}회)`);
     return await compressWithMediaRecorder(file, videoInfo, smallerWidth, smallerHeight, lowerBitrate, audioBitrate, onProgress, onStatus, attempt + 1);
   }
 
@@ -790,7 +779,7 @@ function loadScript(src) {
     const script = document.createElement('script');
     script.src = src;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`スクリプト読み込み失敗: ${src}`));
+    script.onerror = () => reject(new Error(`스크립트를 불러오지 못했습니다: ${src}`));
     document.head.appendChild(script);
   });
 }
@@ -808,7 +797,7 @@ async function getVideoInfo(file) {
         fps: 30,
       });
     };
-    video.onerror = () => reject(new Error('動画メタデータの取得に失敗'));
+    video.onerror = () => reject(new Error('동영상 메타데이터를 읽지 못했습니다.'));
     video.src = URL.createObjectURL(file);
   });
 }

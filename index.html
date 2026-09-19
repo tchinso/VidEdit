@@ -1,832 +1,543 @@
-<!DOCTYPE html>
-<html lang="ja">
+<!doctype html>
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Discord 圧縮くん - 画像/動画をプラン上限まで圧縮するやつ</title>
+  <meta name="theme-color" content="#5865f2">
+  <title>Discord 20MB 미디어 도구</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      color-scheme: dark;
+      --page: #111827;
+      --panel: #18233f;
+      --panel-raised: #202e50;
+      --line: #33466f;
+      --text: #eef2ff;
+      --muted: #aab5ce;
+      --faint: #77839e;
+      --brand: #7183ff;
+      --brand-strong: #5865f2;
+      --good: #43b581;
+      --warn: #faa61a;
+      --danger: #f04747;
     }
 
+    * { box-sizing: border-box; }
+
     body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: #1a1a2e;
-      color: #e0e0e0;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
+      margin: 0;
+      padding: 24px 16px 40px;
+      background: radial-gradient(circle at 50% -20%, #253c73 0, var(--page) 42%);
+      color: var(--text);
+      font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(113, 131, 255, .55);
+      outline-offset: 2px;
+    }
+
+    [hidden] { display: none !important; }
+
+    .app-shell {
+      width: min(100%, 780px);
+      margin: 0 auto;
     }
 
     header {
       text-align: center;
-      margin-bottom: 24px;
+      margin: 10px auto 24px;
     }
 
-    header h1 {
-      font-size: 1.8rem;
-      background: linear-gradient(135deg, #5865F2, #7289DA);
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.65rem, 4vw, 2.2rem);
+      letter-spacing: -.045em;
+      background: linear-gradient(135deg, #9ba7ff, #68d9ff);
       -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
       background-clip: text;
-      margin-bottom: 8px;
+      color: transparent;
     }
 
     header p {
-      color: #888;
-      font-size: 0.9rem;
+      max-width: 620px;
+      margin: 5px auto;
+      color: var(--muted);
+      font-size: .95rem;
+      line-height: 1.6;
     }
 
-    /* ===== タブ ===== */
+    .plan-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 14px;
+      padding: 8px 12px;
+      border: 1px solid rgba(113, 131, 255, .6);
+      border-radius: 999px;
+      background: rgba(88, 101, 242, .15);
+      color: #dfe4ff;
+      font-size: .85rem;
+      font-weight: 700;
+    }
+
     .tabs {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
-      margin-bottom: 20px;
-      max-width: 600px;
-      width: 100%;
+      margin-bottom: 18px;
     }
 
     .tab {
-      flex: 1;
-      padding: 12px 20px;
-      background: #16213e;
-      border: 2px solid transparent;
+      min-height: 52px;
+      padding: 9px 8px;
+      border: 1px solid transparent;
       border-radius: 12px;
+      background: rgba(24, 35, 63, .9);
+      color: var(--muted);
       cursor: pointer;
-      font-size: 1rem;
-      font-weight: 600;
-      color: #888;
-      transition: all 0.2s ease;
-      text-align: center;
+      font-size: .86rem;
+      font-weight: 700;
+      line-height: 1.35;
+      transition: .18s ease;
     }
 
-    .tab:hover {
-      color: #e0e0e0;
-    }
+    .tab:hover { color: var(--text); background: var(--panel-raised); }
 
     .tab.active {
-      background: rgba(88, 101, 242, 0.15);
-      border-color: #5865F2;
-      color: #e0e0e0;
+      border-color: var(--brand);
+      background: rgba(88, 101, 242, .2);
+      color: var(--text);
+      box-shadow: 0 0 0 1px rgba(113, 131, 255, .1) inset;
     }
 
-    .tab-content {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
 
-    .tab-content.active {
+    .settings, .tool-controls, .results, .footer-note, .log-actions { width: 100%; }
+
+    .settings {
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 18px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(79, 103, 151, .45);
+      border-radius: 14px;
+      background: rgba(24, 35, 63, .82);
+      color: var(--muted);
+      font-size: .9rem;
     }
+
+    .setting-strong { color: #b6c1ff; font-weight: 800; }
 
     .upload-area {
-      width: 100%;
-      max-width: 600px;
-      min-height: 250px;
-      border: 3px dashed #5865F2;
-      border-radius: 16px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      min-height: 226px;
+      padding: 24px;
+      border: 2px dashed var(--brand);
+      border-radius: 18px;
+      background: rgba(88, 101, 242, .07);
       cursor: pointer;
-      transition: all 0.3s ease;
-      background: rgba(88, 101, 242, 0.05);
-      margin-bottom: 20px;
+      text-align: center;
+      transition: .2s ease;
     }
 
-    .upload-area:hover,
-    .upload-area.dragover {
-      border-color: #7289DA;
-      background: rgba(88, 101, 242, 0.15);
-      transform: scale(1.01);
+    .upload-area:hover, .upload-area.dragover {
+      transform: translateY(-2px);
+      border-color: #9ba7ff;
+      background: rgba(88, 101, 242, .16);
     }
 
-    .upload-area .icon {
-      font-size: 3rem;
-      margin-bottom: 12px;
+    .upload-area.processing { pointer-events: none; opacity: .48; }
+    .upload-area .icon { margin-bottom: 12px; font-size: 3rem; }
+    .upload-area .text { color: var(--text); font-size: 1.04rem; font-weight: 700; }
+    .upload-area .subtext { margin-top: 8px; color: var(--faint); font-size: .82rem; line-height: 1.5; }
+
+    input[type="file"] { display: none; }
+
+    .tool-controls {
+      margin-top: 14px;
+      padding: 16px;
+      border: 1px solid rgba(79, 103, 151, .55);
+      border-radius: 16px;
+      background: rgba(24, 35, 63, .94);
     }
 
-    .upload-area .text {
-      font-size: 1.1rem;
-      color: #aaa;
+    .tool-file-info {
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(113, 131, 255, .11);
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
     }
 
-    .upload-area .subtext {
-      font-size: 0.8rem;
-      color: #666;
-      margin-top: 6px;
-    }
+    .tool-file-info strong { color: var(--text); }
 
-    #fileInput, #videoInput {
-      display: none;
-    }
-
-    .results {
+    .editor-preview {
+      display: block;
       width: 100%;
-      max-width: 600px;
+      max-height: 310px;
+      margin-bottom: 16px;
+      border-radius: 12px;
+      background: #090d19;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .field {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .84rem;
+      font-weight: 700;
+    }
+
+    .field input, .field select {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 11px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #101a30;
+      color: var(--text);
+    }
+
+    .mode-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .mode-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 40px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .87rem;
+    }
+
+    .mode-option:has(input:checked) {
+      border-color: var(--brand);
+      background: rgba(88, 101, 242, .15);
+      color: var(--text);
+    }
+
+    .range-fields { margin-top: 4px; }
+
+    .help-text, .estimate {
+      margin: 12px 0 0;
+      color: var(--faint);
+      font-size: .82rem;
+      line-height: 1.55;
+    }
+
+    .estimate { color: #b6c1ff; font-weight: 700; }
+
+    .primary-btn {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--brand-strong), #7183ff);
+      color: #fff;
+      cursor: pointer;
+      font-size: .96rem;
+      font-weight: 800;
+      transition: transform .18s ease, filter .18s ease;
+    }
+
+    .primary-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .primary-btn:disabled { cursor: not-allowed; filter: grayscale(.4); opacity: .58; transform: none; }
+
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 16px;
     }
 
     .result-card {
-      background: #16213e;
-      border-radius: 12px;
-      padding: 20px;
       display: flex;
-      gap: 16px;
       align-items: center;
-      animation: slideIn 0.3s ease;
+      gap: 14px;
+      padding: 15px;
+      border: 1px solid rgba(79, 103, 151, .45);
+      border-radius: 14px;
+      background: var(--panel);
+      animation: slide-in .22s ease;
     }
 
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(20px); }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .result-card .preview {
-      width: 100px;
-      height: 100px;
-      border-radius: 8px;
+    .preview, .video-preview {
+      width: 116px;
+      height: 80px;
+      flex: 0 0 auto;
+      border-radius: 9px;
+      background: #090d19;
       object-fit: cover;
-      flex-shrink: 0;
-      background: #0a0a1a;
     }
 
-    .result-card .info {
-      flex: 1;
-      min-width: 0;
-    }
+    .result-card .info { min-width: 0; flex: 1; }
+    .filename { overflow: hidden; margin-bottom: 8px; color: var(--text); font-size: .92rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 
-    .result-card .filename {
-      font-weight: 600;
-      font-size: 0.95rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-bottom: 8px;
-    }
+    .stats { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stat { padding: 4px 7px; border-radius: 6px; background: rgba(113, 131, 255, .12); color: var(--muted); font-size: .76rem; }
+    .stat.before { color: #ff9292; }
+    .stat.after { color: #74d7aa; }
+    .stat.ratio { color: #ffd180; }
 
-    .result-card .stats {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-    }
-
-    .result-card .stat {
-      background: rgba(88, 101, 242, 0.15);
-      padding: 4px 10px;
-      border-radius: 6px;
-    }
-
-    .result-card .stat.before { color: #f04747; }
-    .result-card .stat.after { color: #43b581; }
-    .result-card .stat.ratio { color: #faa61a; }
-
-    .result-card .download-btn {
-      background: #43b581;
+    .download-btn {
+      flex: 0 0 auto;
+      padding: 10px 13px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--good);
       color: #fff;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
       cursor: pointer;
-      font-size: 0.9rem;
-      font-weight: 600;
-      transition: background 0.2s;
-      flex-shrink: 0;
+      font-size: .84rem;
+      font-weight: 800;
     }
 
-    .result-card .download-btn:hover {
-      background: #3ca374;
-    }
-
-    .progress-bar {
-      width: 100%;
-      max-width: 600px;
-      height: 6px;
-      background: #16213e;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-bottom: 20px;
-      display: none;
-    }
-
-    .progress-bar.active {
-      display: block;
-    }
-
-    .progress-bar .fill {
-      height: 100%;
-      background: linear-gradient(90deg, #5865F2, #43b581);
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    .settings {
-      width: 100%;
-      max-width: 600px;
-      background: #16213e;
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .settings label {
-      font-size: 0.9rem;
-      color: #aaa;
-    }
-
-    .settings select {
-      background: #1a1a2e;
-      color: #e0e0e0;
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    .settings .target-size {
-      font-weight: 600;
-      color: #5865F2;
-    }
+    .warning-text { margin-top: 7px; color: var(--warn); font-size: .77rem; line-height: 1.45; }
 
     .footer-note {
-      margin-top: 30px;
-      font-size: 0.8rem;
-      color: #555;
+      margin-top: 28px;
+      color: var(--faint);
+      font-size: .82rem;
+      line-height: 1.65;
       text-align: center;
-      max-width: 600px;
     }
 
-    .footer-note a {
-      color: #5865F2;
-      text-decoration: none;
+    .log-actions { display: flex; justify-content: center; margin-top: 20px; }
+
+    #copyLogBtn {
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .8rem;
     }
 
-    /* ===== 処理中オーバーレイ ===== */
+    #copyLogBtn:hover, #copyLogBtn.copied { border-color: var(--brand); color: var(--text); }
+
     .processing-overlay {
-      display: none;
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(10, 10, 26, 0.85);
-      backdrop-filter: blur(4px);
-      z-index: 9999;
+      inset: 0;
+      z-index: 10;
+      display: none;
       align-items: center;
       justify-content: center;
       flex-direction: column;
-      gap: 20px;
-    }
-
-    .processing-overlay.active {
-      display: flex;
-    }
-
-    .processing-overlay .spinner {
-      display: none;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .processing-overlay .processing-text {
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: #e0e0e0;
-    }
-
-    .processing-overlay .processing-subtext {
-      font-size: 0.9rem;
-      color: #888;
-      max-width: 400px;
+      gap: 12px;
+      padding: 28px;
+      background: rgba(5, 10, 23, .86);
+      backdrop-filter: blur(5px);
       text-align: center;
     }
 
-    .processing-overlay .progress-bar {
-      width: 320px;
-      max-width: 80vw;
-      height: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      overflow: hidden;
-      margin-top: 8px;
+    .processing-overlay.active { display: flex; }
+    .processing-text { color: var(--text); font-size: 1.14rem; font-weight: 800; }
+    .processing-subtext { max-width: 440px; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+    .progress-bar { width: min(82vw, 360px); height: 10px; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .13); }
+    .progress-bar .fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brand-strong), #65d7ff); transition: width .2s ease; }
+    .progress-percent { color: #fff; font-size: .9rem; font-weight: 800; }
+    .file-counter { min-height: 18px; color: #b6c1ff; font-size: .82rem; }
+    .cancel-btn { margin-top: 5px; padding: 10px 22px; border: 1px solid var(--danger); border-radius: 9px; background: transparent; color: #ff8585; cursor: pointer; font-weight: 800; }
+    .cancel-btn:disabled { cursor: wait; opacity: .55; }
+
+    @media (max-width: 650px) {
+      body { padding: 14px 12px 28px; }
+      .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tab { min-height: 46px; }
+      .result-card { align-items: stretch; flex-direction: column; }
+      .preview, .video-preview { width: 100%; height: 180px; }
+      .download-btn { width: 100%; }
     }
 
-    .processing-overlay .progress-bar .fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #5865F2, #9B59F2);
-      border-radius: 6px;
-      transition: width 0.3s ease;
-    }
-
-    .processing-overlay .file-counter {
-      font-size: 0.85rem;
-      color: #5865F2;
-      font-weight: 600;
-      margin-top: 4px;
-    }
-
-    .upload-area.processing {
-      pointer-events: none;
-      opacity: 0.4;
-      border-color: #555;
-      cursor: not-allowed;
-    }
-
-    .upload-area.processing .icon {
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.9); }
-    }
-
-    /* ===== 動画プレビュー ===== */
-    .video-preview {
-      width: 120px;
-      height: 80px;
-      border-radius: 8px;
-      object-fit: cover;
-      flex-shrink: 0;
-      background: #0a0a1a;
-    }
-
-    /* ===== デバッグパネル ===== */
-    .debug-container {
-      width: 100%;
-      max-width: 600px;
-      margin-top: 20px;
-      display: none;
-    }
-
-    .debug-container.active {
-      display: block;
-    }
-
-    .debug-toggle {
-      width: 100%;
-      padding: 10px;
-      background: #0d1117;
-      border: 1px solid #333;
-      border-radius: 8px;
-      color: #888;
-      font-size: 0.85rem;
-      cursor: pointer;
-      text-align: center;
-      margin-bottom: 8px;
-    }
-
-    .debug-toggle:hover {
-      color: #e0e0e0;
-      border-color: #555;
-    }
-
-    .debug-panel {
-      background: #0d1117;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 12px;
-      max-height: 300px;
-      overflow-y: auto;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      line-height: 1.6;
-      display: none;
-    }
-
-    .debug-panel.active {
-      display: block;
-    }
-
-    .debug-line {
-      white-space: pre-wrap;
-      word-break: break-all;
-      margin-bottom: 2px;
-    }
-
-    .debug-info { color: #8b949e; }
-    .debug-load { color: #58a6ff; }
-    .debug-step { color: #d2a8ff; }
-    .debug-ffmpeg { color: #7ee787; }
-    .debug-error { color: #ff7b72; font-weight: bold; }
-    .debug-warn { color: #f0883e; }
-
-    .debug-copy-btn {
-      width: 100%;
-      padding: 8px;
-      background: #21262d;
-      border: 1px solid #333;
-      border-radius: 6px;
-      color: #c9d1d9;
-      font-size: 0.8rem;
-      cursor: pointer;
-      margin-top: 8px;
-      text-align: center;
-    }
-
-    .debug-copy-btn:hover {
-      background: #30363d;
-    }
-
-    /* ===== レスポンシブ対応 ===== */
-    @media (max-width: 600px) {
-      body {
-        padding: 12px;
-        padding-bottom: 24px;
-      }
-
-      header h1 {
-        font-size: 1.4rem;
-      }
-
-      header p {
-        font-size: 0.85rem;
-      }
-
-      .tabs {
-        gap: 6px;
-        margin-bottom: 14px;
-      }
-
-      .tab {
-        padding: 10px 8px;
-        font-size: 0.85rem;
-      }
-
-      .settings {
-        padding: 12px 14px;
-        gap: 10px;
-        margin-bottom: 14px;
-      }
-
-      .upload-area {
-        min-height: 200px;
-        padding: 16px;
-        margin-bottom: 14px;
-      }
-
-      .upload-area .icon {
-        font-size: 2.4rem;
-      }
-
-      .upload-area .text {
-        font-size: 0.95rem;
-      }
-
-      .upload-area .subtext {
-        font-size: 0.75rem;
-      }
-
-      .results {
-        gap: 12px;
-      }
-
-      .result-card {
-        flex-direction: column;
-        align-items: stretch;
-        text-align: center;
-        padding: 16px;
-        gap: 12px;
-      }
-
-      .result-card .preview {
-        width: 100%;
-        height: 180px;
-      }
-
-      .result-card .download-btn {
-        width: 100%;
-      }
-
-      .processing-overlay .processing-text {
-        font-size: 1rem;
-      }
-
-      .processing-overlay .processing-subtext {
-        font-size: 0.8rem;
-      }
-
-      .processing-overlay .progress-bar {
-        width: 80vw;
-      }
-    }
-
-    @media (max-width: 380px) {
-      header h1 {
-        font-size: 1.2rem;
-      }
-
-      .tab {
-        font-size: 0.72rem;
-        padding: 8px 4px;
-      }
-
-      .result-card .stats {
-        font-size: 0.75rem;
-        gap: 8px;
-      }
-    }
-
-    /* ===== キャンセルボタン ===== */
-    .cancel-btn {
-      margin-top: 16px;
-      padding: 10px 28px;
-      background: transparent;
-      border: 1px solid #f04747;
-      border-radius: 8px;
-      color: #f04747;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .cancel-btn:hover:not(:disabled) {
-      background: rgba(240, 71, 71, 0.15);
-    }
-
-    .cancel-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* ===== 更新履歴 ===== */
-    .changelog {
-      width: 100%;
-      max-width: 600px;
-      margin-top: 40px;
-      margin-bottom: 20px;
-    }
-
-    /* ===== ログコピー ===== */
-    .log-actions {
-      width: 100%;
-      max-width: 600px;
-      margin-top: 24px;
-      display: flex;
-      justify-content: center;
-    }
-
-    #copyLogBtn {
-      padding: 8px 20px;
-      background: transparent;
-      border: 1px solid #4e545c;
-      border-radius: 8px;
-      color: #9aa0a6;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    #copyLogBtn:hover {
-      border-color: #7289DA;
-      color: #e0e0e0;
-    }
-
-    #copyLogBtn.copied {
-      border-color: #3ba55d;
-      color: #3ba55d;
-    }
-
-    .changelog h2 {
-      font-size: 1.1rem;
-      color: #e0e0e0;
-      margin-bottom: 14px;
-      border-bottom: 1px solid #333;
-      padding-bottom: 8px;
-    }
-
-    .changelog-list {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .changelog-item {
-      display: flex;
-      gap: 14px;
-      background: #16213e;
-      border-radius: 10px;
-      padding: 14px 16px;
-    }
-
-    .changelog-date {
-      flex-shrink: 0;
-      font-weight: 700;
-      color: #7289DA;
-      font-size: 0.9rem;
-      min-width: 72px;
-    }
-
-    .changelog-body {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .changelog-title {
-      font-weight: 600;
-      color: #e0e0e0;
-      font-size: 0.9rem;
-      margin-bottom: 6px;
-    }
-
-    .changelog ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .changelog li {
-      color: #aaa;
-      font-size: 0.8rem;
-      line-height: 1.7;
-      padding-left: 14px;
-      position: relative;
-    }
-
-    .changelog li::before {
-      content: '•';
-      position: absolute;
-      left: 0;
-      color: #5865F2;
-    }
-
-    @media (max-width: 600px) {
-      .changelog-item {
-        flex-direction: column;
-        gap: 6px;
-      }
+    @media (max-width: 390px) {
+      .field-grid { grid-template-columns: 1fr; }
+      .settings { align-items: flex-start; flex-direction: column; gap: 6px; }
+      .tab { font-size: .79rem; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>📦 Discord 圧縮くん</h1>
-    <p>Discordのプラン別上限（無料 20MB / Nitro Basic 50MB / Nitro 500MB）に合わせて、画像や動画を圧縮するWebアプリです</p>
-    <p>画像も動画も目標サイズ以下に！完全ローカル処理でファイル送信なし</p>
-  </header>
+  <main class="app-shell">
+    <header>
+      <h1>📦 Discord 20MB 미디어 도구</h1>
+      <p>이미지와 동영상을 브라우저에서만 처리합니다. 파일은 서버로 전송되지 않습니다.</p>
+      <div class="plan-badge">🛡️ Discord 무료 플랜 · 파일당 20MB 기준</div>
+    </header>
 
-  <!-- プラン選択（共通） -->
-  <div class="settings plan-settings">
-    <label>🏷️ Discordプラン:</label>
-    <select id="planSelect">
-      <option value="free" selected>無料 (20MBまで)</option>
-      <option value="basic">Nitro Basic (50MBまで)</option>
-      <option value="nitro">Nitro (500MBまで)</option>
-    </select>
-  </div>
+    <nav class="tabs" aria-label="도구 선택" role="tablist">
+      <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="image">🖼️ 이미지 압축</button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="video">🎬 동영상 압축</button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="speed">⏩ 속도 조절</button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="trim">✂️ 영상 자르기</button>
+    </nav>
 
-  <!-- タブ切り替え -->
-  <div class="tabs">
-    <div class="tab active" data-tab="image">🖼️ 画像圧縮 (Rust/WASM)</div>
-    <div class="tab" data-tab="video">🎬 動画圧縮 (WebCodecs)</div>
-  </div>
-
-  <!-- ===== 画像タブ ===== -->
-  <div class="tab-content active" id="imageTab">
-    <div class="settings">
-      <label>🎯 目標サイズ:</label>
-      <span class="target-size">20 MB</span>
-      <label>📦 出力フォーマット:</label>
-      <select id="formatSelect">
-        <option value="webp">WebP（推奨・最小サイズ）</option>
-        <option value="jpeg">JPEG（互換性重視）</option>
-      </select>
-    </div>
-
-    <div class="upload-area" id="uploadArea">
-      <div class="icon">📎</div>
-      <div class="text">ここに画像をドロップ または クリックして選択</div>
-      <div class="subtext">対応形式: JPEG, WebP, GIF, BMP / 🦀 Rust/WASMエンジン搭載</div>
-    </div>
-    <input type="file" id="fileInput" accept="image/*" multiple>
-
-    <div class="results" id="results"></div>
-  </div>
-
-  <!-- ===== 動画タブ ===== -->
-  <div class="tab-content" id="videoTab">
-    <div class="settings">
-      <label>🎯 目標サイズ:</label>
-      <span class="target-size">20 MB</span>
-      <label>📦 出力:</label>
-      <span style="color:#aaa;">MP4 (H.264 + AAC)</span>
-    </div>
-
-    <div class="upload-area" id="videoUploadArea">
-      <div class="icon">🎬</div>
-      <div class="text">ここに動画をドロップ または クリックして選択</div>
-      <div class="subtext">対応形式: MP4, WebM, MOV, AVI / ⚠️ 処理に時間がかかります</div>
-    </div>
-    <input type="file" id="videoInput" accept="video/*">
-
-    <div class="results" id="videoResults"></div>
-  </div>
-
-  <!-- 古いプログレスバー（オーバーレイ内に移動したため削除） -->
-
-  <div class="footer-note">
-    🔒 全処理はブラウザ内で完結します。サーバーへの送信は一切ありません。<br>
-    Discord各プランの添付ファイル上限（無料 20MB / Nitro Basic 50MB / Nitro 500MB）に対応。
-  </div>
-
-  <!-- ログコピー（エラー報告用） -->
-  <div class="log-actions">
-    <button id="copyLogBtn">📋 処理ログをコピー</button>
-  </div>
-
-  <!-- ===== 更新履歴 ===== -->
-  <section class="changelog">
-    <h2>📜 更新履歴</h2>
-    <div class="changelog-list">
-      <div class="changelog-item">
-        <div class="changelog-date">2026/8/17</div>
-        <div class="changelog-body">
-          <div class="changelog-title">外部コントリビューターによる性能改善</div>
-          <ul>
-            <li>GPU（ハードウェア）エンコード/デコードを優先使用。非対応環境では自動フォールバック</li>
-            <li>ビットレート方式をCBR→VBRに変更。同じサイズでもシーンごとに賢くビット配分して画質向上</li>
-            <li>ライブラリ先読み・エンコード待ち時間の短縮</li>
-            <li>安全マージンを10%→5%に縮小し、その分ビットレート（画質）を引き上げ</li>
-          </ul>
-        </div>
+    <section class="tab-content active" id="imageTab" role="tabpanel">
+      <div class="settings">
+        <span>🎯 압축 목표 <strong class="setting-strong">20MB 이하</strong></span>
+        <span>🦀 Rust/WASM으로 로컬 처리</span>
       </div>
-      <div class="changelog-item">
-        <div class="changelog-date">2026/8/17</div>
-        <div class="changelog-body">
-          <div class="changelog-title">キャンセルボタン・プラン選択・更新履歴追加</div>
-          <ul>
-            <li>圧縮中に中断できるキャンセルボタンを追加</li>
-            <li>再圧縮のビットレート計算を実測から逆算する方式に改善（再圧縮回数削減）</li>
-            <li>Discordプラン選択（無料20MB / Nitro Basic 50MB / Nitro 500MB）で圧縮目標を切替可能に。高プランは高解像度のまま圧縮</li>
-            <li>目標未達でも最終結果を妥協案としてダウンロード可能に</li>
-            <li>スマホ縦動画が歪む不具合を修正（回転メタデータ対応）</li>
-            <li>動画圧縮で音声が消える不具合を修正（AAC音声をそのまま出力に埋め込み・再エンコードなし）</li>
-            <li>音声込みで目標サイズに正確に収まるようビットレート計算を改善（音声実サイズを差し引いて映像に配分）</li>
-            <li>圧縮後の動画で音声が再生されない不具合を修正（音声設定ボックスの二重構造を解消）</li>
-            <li>Safariで「対応する動画エンコーダーが見つかりません」と出る不具合を修正（MP4録画形式に対応）</li>
-            <li>フォールバック圧縮（MediaRecorder）で音声が消える不具合を修正</li>
-          </ul>
-        </div>
+      <div class="upload-area" id="uploadArea" tabindex="0" role="button" aria-label="이미지 파일 선택">
+        <div class="icon">📎</div>
+        <div class="text">이미지를 놓거나 클릭해서 선택하세요</div>
+        <div class="subtext">JPEG, PNG, WebP, GIF, BMP 등 · 여러 파일을 한 번에 선택할 수 있습니다</div>
       </div>
-      <div class="changelog-item">
-        <div class="changelog-date">2026/8/16</div>
-        <div class="changelog-body">
-          <div class="changelog-title">運用開始</div>
-          <ul>
-            <li>画像圧縮（Rust/WASM）・動画圧縮（WebCodecs / MediaRecorder）を公開</li>
-            <li>スマホ対応のレスポンシブデザイン</li>
-            <li>Discordの上限引き上げ（10MB→20MB）に対応</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+      <div class="results" id="results" aria-live="polite"></div>
+    </section>
 
-  <!-- 処理中オーバーレイ -->
-  <div class="processing-overlay" id="processingOverlay">
-    <div class="processing-text" id="processingText">圧縮処理中...</div>
-    <div class="processing-subtext" id="processingSubtext">しばらくお待ちください</div>
-    <div class="progress-bar" id="progressBar">
-      <div class="fill" id="progressFill"></div>
-    </div>
-    <div class="progress-percent" id="progressPercent" style="margin-top: 8px; font-weight: bold; color: #fff;">0%</div>
+    <section class="tab-content" id="videoTab" role="tabpanel">
+      <div class="settings">
+        <span>🎯 압축 목표 <strong class="setting-strong">20MB 이하</strong></span>
+        <span>📦 MP4 또는 WebM으로 저장됩니다</span>
+      </div>
+      <div class="upload-area" id="videoUploadArea" tabindex="0" role="button" aria-label="압축할 동영상 파일 선택">
+        <div class="icon">🎬</div>
+        <div class="text">동영상을 놓거나 클릭해서 선택하세요</div>
+        <div class="subtext">MP4, WebM, MOV, AVI 등 · 처리 시간은 영상 길이와 기기에 따라 달라집니다</div>
+      </div>
+      <input type="file" id="videoInput" accept="video/*">
+      <div class="results" id="videoResults" aria-live="polite"></div>
+    </section>
+
+    <section class="tab-content" id="speedTab" role="tabpanel">
+      <div class="settings">
+        <span>⏩ 전체 영상 또는 원하는 시간 구간만 속도를 바꿉니다</span>
+        <span>🎯 결과는 20MB 이하를 목표로 저장됩니다</span>
+      </div>
+      <div class="upload-area" id="speedUploadArea" tabindex="0" role="button" aria-label="속도를 조절할 동영상 파일 선택">
+        <div class="icon">⏩</div>
+        <div class="text">속도를 조절할 동영상을 선택하세요</div>
+        <div class="subtext">파일을 선택한 뒤 속도와 적용 범위를 설정할 수 있습니다</div>
+      </div>
+      <input type="file" id="speedInput" accept="video/*">
+
+      <div class="tool-controls" id="speedControls" hidden>
+        <div class="tool-file-info" id="speedFileInfo"></div>
+        <video class="editor-preview" id="speedPreview" controls playsinline></video>
+        <div class="field-grid">
+          <label class="field" for="speedRate">속도 (배)
+            <input id="speedRate" type="number" value="2" min="0.25" max="4" step="0.05" inputmode="decimal" list="speedRates">
+          </label>
+          <label class="field" for="speedPreset">자주 쓰는 속도
+            <select id="speedPreset">
+              <option value="">직접 입력</option>
+              <option value="0.25">0.25배</option>
+              <option value="0.5">0.5배</option>
+              <option value="0.75">0.75배</option>
+              <option value="1.25">1.25배</option>
+              <option value="1.5">1.5배</option>
+              <option value="2">2배</option>
+              <option value="3">3배</option>
+              <option value="4">4배</option>
+            </select>
+          </label>
+        </div>
+        <datalist id="speedRates">
+          <option value="0.25"><option value="0.5"><option value="0.75"><option value="1"><option value="1.25"><option value="1.5"><option value="2"><option value="3"><option value="4">
+        </datalist>
+        <div class="mode-options" aria-label="속도 적용 범위">
+          <label class="mode-option"><input type="radio" name="speedScope" value="whole" checked> 전체 영상에 적용</label>
+          <label class="mode-option"><input type="radio" name="speedScope" value="range"> 지정 구간에만 적용</label>
+        </div>
+        <div class="range-fields" id="speedRangeFields" hidden>
+          <div class="field-grid">
+            <label class="field" for="speedStart">구간 시작 (0.1초 단위)
+              <input id="speedStart" type="number" value="0" min="0" step="0.1" inputmode="decimal">
+            </label>
+            <label class="field" for="speedEnd">구간 종료 (0.1초 단위)
+              <input id="speedEnd" type="number" min="0" step="0.1" inputmode="decimal">
+            </label>
+          </div>
+        </div>
+        <p class="estimate" id="speedEstimate"></p>
+        <p class="help-text">시간은 0.1초 단위로 입력할 수 있습니다. 속도는 0.25배부터 4배까지 설정할 수 있으며, 실제 구간 경계에는 프레임 단위의 아주 작은 오차가 생길 수 있습니다.</p>
+        <button class="primary-btn" id="speedProcessBtn" type="button">속도 적용하기</button>
+      </div>
+      <div class="results" id="speedResults" aria-live="polite"></div>
+    </section>
+
+    <section class="tab-content" id="trimTab" role="tabpanel">
+      <div class="settings">
+        <span>✂️ 필요한 구간만 정확히 다시 인코딩합니다</span>
+        <span>🎯 결과는 20MB 이하를 목표로 저장됩니다</span>
+      </div>
+      <div class="upload-area" id="trimUploadArea" tabindex="0" role="button" aria-label="자를 동영상 파일 선택">
+        <div class="icon">✂️</div>
+        <div class="text">자를 동영상을 선택하세요</div>
+        <div class="subtext">미리보기를 보며 시작 시간과 종료 시간을 0.1초 단위로 입력할 수 있습니다</div>
+      </div>
+      <input type="file" id="trimInput" accept="video/*">
+
+      <div class="tool-controls" id="trimControls" hidden>
+        <div class="tool-file-info" id="trimFileInfo"></div>
+        <video class="editor-preview" id="trimPreview" controls playsinline></video>
+        <div class="field-grid">
+          <label class="field" for="trimStart">시작 시간 (0.1초 단위)
+            <input id="trimStart" type="number" value="0" min="0" step="0.1" inputmode="decimal">
+          </label>
+          <label class="field" for="trimEnd">종료 시간 (0.1초 단위)
+            <input id="trimEnd" type="number" min="0" step="0.1" inputmode="decimal">
+          </label>
+        </div>
+        <p class="estimate" id="trimEstimate"></p>
+        <p class="help-text">시간은 0.1초 단위로 입력할 수 있습니다. 입력한 시작 시간부터 종료 시간 직전까지 저장하며, 종료 시간은 전체 영상 길이를 넘을 수 없습니다.</p>
+        <button class="primary-btn" id="trimProcessBtn" type="button">선택 구간 자르기</button>
+      </div>
+      <div class="results" id="trimResults" aria-live="polite"></div>
+    </section>
+
+    <p class="footer-note">🔒 모든 처리는 이 브라우저 안에서 완료됩니다. 압축, 속도 조절, 자르기 결과는 Discord 무료 플랜의 20MB 제한을 기준으로 저장합니다.</p>
+    <div class="log-actions"><button id="copyLogBtn" type="button">📋 처리 로그 복사</button></div>
+  </main>
+
+  <div class="processing-overlay" id="processingOverlay" aria-live="assertive" aria-modal="true" role="dialog">
+    <div class="processing-text" id="processingText">처리 중입니다...</div>
+    <div class="processing-subtext" id="processingSubtext">잠시만 기다려 주세요.</div>
+    <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+    <div class="progress-percent" id="progressPercent">0%</div>
     <div class="file-counter" id="fileCounter"></div>
-    <button class="cancel-btn" id="cancelBtn">✕ キャンセル</button>
+    <button class="cancel-btn" id="cancelBtn" type="button">✕ 취소</button>
   </div>
 
-  <!-- デバッグパネル（廃止：ログ不要のため）
-  <div class="debug-container active" id="debugContainer">
-    <button class="debug-toggle" id="debugToggle">📋 デバッグログを表示/非表示</button>
-    <div class="debug-panel active" id="debugPanel"></div>
-    <button class="debug-copy-btn" id="debugCopyBtn">📋 ログをすべてコピー</button>
-  </div>
-  -->
-
-  <!-- ===== JavaScript ===== -->
-  <!-- インラインエラーハンドラー（app.js読み込み失敗時に真っ白を防ぐ） -->
   <script>
-    window.addEventListener('error', function(e) {
-      if (e.message && e.message.includes('import')) {
-        document.body.innerHTML = '<div style="color:#ff7b72;padding:40px;font-family:sans-serif;text-align:center;"><h2>⚠️ アプリの読み込みに失敗しました</h2><p style="margin:20px 0;color:#aaa;">' + e.message + '</p><p style="color:#888;">URLバーの更新ボタン長押し → 厳密な再読み込みを試してください</p></div>';
+    window.addEventListener('error', function (event) {
+      if (event.message && event.message.includes('import')) {
+        document.body.innerHTML = '<div style="max-width:560px;margin:80px auto;padding:24px;color:#eef2ff;font-family:sans-serif;text-align:center"><h2>⚠️ 앱을 불러오지 못했습니다</h2><p style="color:#aab5ce;line-height:1.6">페이지를 새로고침한 뒤 다시 시도해 주세요.</p></div>';
       }
     });
   </script>
