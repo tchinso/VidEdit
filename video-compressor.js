@@ -70,7 +70,8 @@ export async function compressVideo(file, onProgress, onStatus) {
 
   onStatus?.('동영상 정보를 분석하는 중...');
   const videoInfo = await getVideoInfo(file);
-  addDebugLog('INFO', `入力: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration.toFixed(1)}秒, ${videoInfo.fps}fps`);
+  addDebugLog('INFO', `입력: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration.toFixed(1)}초`);
+  addDebugLog('INFO', `입력 FPS: ${formatFrameRate(videoInfo.fps)} (기존 메타데이터)`);
 
   // 元ファイルが既に目標サイズ以下ならそのまま返す
   if (file.size <= TARGET_SIZE_BYTES) {
@@ -129,9 +130,14 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
   // Phase 2: MP4デマックス (5〜15%)
   onStatus?.('동영상을 분석하는 중...');
   onProgress?.(8);
-  const { chunks, audioChunks, decoderConfig, audioDecoderConfig, videoTrack } = await demuxMP4(file);
+  const { chunks, audioChunks, decoderConfig, audioDecoderConfig, videoTrack, videoTiming } = await demuxMP4(file);
   addDebugLog('INFO', `MP4 분석 완료: 영상 ${chunks.length}개 청크${audioChunks.length > 0 ? ` + 오디오 ${audioChunks.length}개 청크` : ' (오디오 없음)'}`);
   onProgress?.(15);
+
+  // 기존 FPS를 우선하되, 샘플 타이밍과 크게 다를 때만 실제 타이밍으로 보정한다.
+  // ReplayKit MOV는 브라우저 메타데이터가 30fps로 보이더라도 60fps 샘플을 담을 수 있다.
+  const inputFps = resolveInputFrameRate(videoInfo.fps, videoTiming);
+  videoInfo.fps = inputFps;
 
   // ===== 音込みの正確なビットレート計算 =====
   // 音声は元のAACをそのままコピーするため、実際の音声サイズを映像ビットレートから差し引く
@@ -169,7 +175,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
     width: targetWidth,
     height: targetHeight,
     bitrate: videoBitrate,
-    framerate: videoInfo.fps,
+    framerate: inputFps,
     // VBRにより同じ平均ビットレートでもシーンに応じてビット配分を最適化する
     bitrateMode: 'variable',
     // 'quality' はリアルタイム制約を外し、圧縮効率（画質/ビットレート）を優先するモード
@@ -345,6 +351,7 @@ async function compressWithWebCodecs(file, videoInfo, targetWidth, targetHeight,
                   for (const aChunk of audioChunks) {
                     muxer.addAudioChunk(aChunk, { decoderConfig: audioDecoderConfig });
                   }
+                  addDebugLog('INFO', `출력 오디오 트랙 생성: AAC ${audioDecoderConfig.numberOfChannels}ch ${audioDecoderConfig.sampleRate}Hz`);
                   addDebugLog('INFO', `출력에 오디오 추가: ${audioChunks.length}개 청크 (${(audioTotalBytes / 1048576).toFixed(2)}MB)`);
                 } catch (e) {
                   addDebugLog('WARN', `오디오 추가 실패(무음으로 계속): ${e.message}`);
@@ -448,7 +455,7 @@ async function demuxMP4(file) {
         if (at.codec && at.codec.startsWith('mp4a')) {
           audioTrack = at;
           audioDone = false;
-          addDebugLog('INFO', `원본 오디오: AAC ${at.audio.channel_count}ch ${at.audio.sample_rate}Hz → 그대로 출력에 복사`);
+          addDebugLog('INFO', `원본 오디오 감지: AAC ${at.audio.channel_count}ch ${at.audio.sample_rate}Hz`);
           mp4box.setExtractionOptions(at.id, null, { nbSamples: 200 });
         } else {
           addDebugLog('WARN', `원본 오디오는 ${at.codec} 형식(미지원)이라 무음으로 출력됩니다.`);
@@ -477,6 +484,10 @@ async function demuxMP4(file) {
       mp4box.start();
     };
 
+    let videoSampleCount = 0;
+    let firstVideoTimestamp = Infinity;
+    let lastVideoEndTimestamp = -Infinity;
+
     mp4box.onSamples = (trackId, ref, samples) => {
       // ===== 音声サンプル =====
       if (audioTrack && trackId === audioTrack.id) {
@@ -499,6 +510,13 @@ async function demuxMP4(file) {
       let firstKeyFound = chunks.length > 0;
 
       for (const sample of samples) {
+        // DTS 순서로 전달된 B-frame도 있으므로 배열의 첫/마지막이 아니라 CTS 범위를 사용한다.
+        const sampleTimestamp = sample.cts * 1000000 / sample.timescale;
+        const sampleDuration = sample.duration * 1000000 / sample.timescale;
+        videoSampleCount++;
+        firstVideoTimestamp = Math.min(firstVideoTimestamp, sampleTimestamp);
+        lastVideoEndTimestamp = Math.max(lastVideoEndTimestamp, sampleTimestamp + sampleDuration);
+
         // 最初のキーフレームが来るまでスキップ（デコーダ初期化に必要）
         if (!firstKeyFound) {
           if (!sample.is_sync) {
@@ -509,8 +527,8 @@ async function demuxMP4(file) {
 
         const chunk = new EncodedVideoChunk({
           type: sample.is_sync ? 'key' : 'delta',
-          timestamp: sample.cts * 1000000 / sample.timescale,
-          duration: sample.duration * 1000000 / sample.timescale,
+          timestamp: sampleTimestamp,
+          duration: sampleDuration,
           data: sample.data,
         });
         chunks.push(chunk);
@@ -539,17 +557,35 @@ async function demuxMP4(file) {
                   numberOfChannels: audioTrack.audio.channel_count,
                   description: asc,
                 };
+                addDebugLog('INFO', `AAC AudioSpecificConfig: ${formatBytesAsHex(asc)}`);
               } else {
-                addDebugLog('WARN', 'AudioSpecificConfig 추출 실패. muxer의 자동 생성을 사용합니다.');
+                addDebugLog('WARN', 'AudioSpecificConfig 추출 실패.');
               }
             }
           } catch (e) {
-            addDebugLog('WARN', `오디오 description을 읽지 못해 무음으로 계속합니다: ${e.message}`);
-            audioChunks.length = 0;
+            addDebugLog('WARN', `오디오 description을 읽지 못했습니다: ${e.message}`);
+          }
+          if (!audioDecoderConfig && audioChunks.length > 0) {
+            addDebugLog('WARN', 'AAC 오디오 청크는 존재하지만 AAC 설정 정보를 찾지 못해 오디오 트랙을 생성할 수 없습니다.');
           }
         }
         mp4box.stop();
-        resolve({ chunks, audioChunks, decoderConfig, audioDecoderConfig, videoTrack, audioTrack });
+        const timestampDuration = (lastVideoEndTimestamp - firstVideoTimestamp) / 1000000;
+        const trackDuration = videoTrack.duration && videoTrack.timescale
+          ? videoTrack.duration / videoTrack.timescale
+          : 0;
+        resolve({
+          chunks,
+          audioChunks,
+          decoderConfig,
+          audioDecoderConfig,
+          videoTrack,
+          audioTrack,
+          videoTiming: {
+            sampleCount: videoSampleCount,
+            duration: timestampDuration > 0 ? timestampDuration : trackDuration,
+          },
+        });
       }
     }
 
@@ -597,6 +633,49 @@ function extractAudioSpecificConfig(esdsContent) {
   return null;
 }
 
+function formatBytesAsHex(bytes) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(' ');
+}
+
+function formatFrameRate(fps) {
+  return Number.isInteger(fps) ? String(fps) : fps.toFixed(2);
+}
+
+// 기존 메타데이터 FPS가 실제 샘플 수/타임라인과 크게 모순될 때만 fallback한다.
+// VFR 입력을 불필요하게 CFR 정수로 만들지 않도록, 일반적인 CFR 값에 매우 근접한 경우만 정규화한다.
+function resolveInputFrameRate(metadataFps, videoTiming) {
+  const sampleCount = videoTiming?.sampleCount;
+  const duration = videoTiming?.duration;
+  if (!Number.isFinite(sampleCount) || sampleCount < 2 || !Number.isFinite(duration) || duration <= 0) {
+    return metadataFps;
+  }
+
+  const sampleFps = sampleCount / duration;
+  const hasMetadataFps = Number.isFinite(metadataFps) && metadataFps > 0;
+  const mismatchRatio = hasMetadataFps
+    ? Math.abs(sampleFps - metadataFps) / metadataFps
+    : Infinity;
+
+  // 20% 이내의 작은 차이는 기존 메타데이터 경로를 유지한다.
+  if (hasMetadataFps && mismatchRatio <= 0.2) {
+    return metadataFps;
+  }
+
+  addDebugLog('INFO', `FPS 메타데이터 불일치 감지: metadata=${hasMetadataFps ? formatFrameRate(metadataFps) : '없음'}, samples=${sampleCount}, duration=${duration.toFixed(3)}s`);
+  const encoderFps = normalizeCommonFrameRate(sampleFps);
+  const encoderSuffix = encoderFps === sampleFps ? '' : ` (인코더: ${formatFrameRate(encoderFps)})`;
+  addDebugLog('INFO', `Sample timing 기반 FPS 사용: ${formatFrameRate(sampleFps)}${encoderSuffix}`);
+  return encoderFps;
+}
+
+function normalizeCommonFrameRate(fps) {
+  const commonFrameRates = [24, 25, 30, 48, 50, 60];
+  const nearest = commonFrameRates.reduce((best, candidate) =>
+    Math.abs(candidate - fps) < Math.abs(best - fps) ? candidate : best
+  );
+  return Math.abs(nearest - fps) / fps <= 0.01 ? nearest : fps;
+}
+
 // decoder description — W3C公式サンプルと同じ方法
 // file.getTrackById() で内部trackオブジェクトを取得し、
 // avcC/hvcC/vpcC/av1C ボックスをシリアライズして先頭8バイトを削る
@@ -606,15 +685,34 @@ function getDecoderDescription(file, track) {
     addDebugLog('WARN', 'description: trak를 가져오지 못했습니다.');
     return undefined;
   }
-  for (const entry of trak.mdia.minf.stbl.stsd.entries) {
+  const entries = trak.mdia.minf.stbl.stsd.entries;
+  for (const entry of entries) {
     // 映像: avcC/hvcC/vpcC/av1C、音声: esds（AAC AudioSpecificConfig）
     const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C || entry.esds;
     if (box) {
+      if (entry.esds && track.codec?.startsWith('mp4a')) addDebugLog('INFO', 'AAC 설정 발견: esds');
       const stream = new window.MP4Box.DataStream(undefined, 0, window.MP4Box.DataStream.BIG_ENDIAN);
       box.write(stream);
       const description = new Uint8Array(stream.buffer, 8); // ボックスヘッダー(8バイト)を削除
       return description;
     }
+  }
+
+  // Apple QuickTime AAC는 mp4a의 고정 헤더 뒤에 wave 컨테이너를 두고,
+  // 그 직접 child인 esds에 AudioSpecificConfig를 저장할 수 있다.
+  if (track.codec && track.codec.startsWith('mp4a')) {
+    for (const entry of entries) {
+      if (entry.type !== 'mp4a') continue;
+      const waveEsds = entry.wave?.boxes?.find(box => box.type === 'esds');
+      if (waveEsds) {
+        addDebugLog('INFO', 'Apple QuickTime AAC 구조 감지: mp4a/wave/esds fallback 사용');
+        const stream = new window.MP4Box.DataStream(undefined, 0, window.MP4Box.DataStream.BIG_ENDIAN);
+        waveEsds.write(stream);
+        return new Uint8Array(stream.buffer, 8);
+      }
+    }
+    addDebugLog('WARN', 'AAC esds 상자를 찾지 못했습니다.');
+    return undefined;
   }
   addDebugLog('WARN', 'avcC/hvcC/vpcC/av1C/esds 상자를 찾지 못했습니다.');
   return undefined;
